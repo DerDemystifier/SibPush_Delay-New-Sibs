@@ -1,13 +1,11 @@
 import os
-from pathlib import Path
-from aqt.utils import tooltip
 from aqt import mw
 from aqt import gui_hooks, deckbrowser
-from typing import Collection, Sequence, Callable
+from typing import Sequence
 from anki.cards import Card
-import anki
+from anki.collection import Collection
 from datetime import datetime
-import sys
+from anki.notes import NoteId
 from .helper import (
     cards_details,
     classify_cards,
@@ -17,7 +15,6 @@ from .helper import (
 import logging
 
 
-
 addon_path = os.path.dirname(os.path.realpath(__file__))
 
 LOG_FILE = os.path.join(addon_path, "log.txt")
@@ -25,7 +22,7 @@ LOG_FILE = os.path.join(addon_path, "log.txt")
 logging.basicConfig(filename=LOG_FILE, level=logging.DEBUG, encoding="UTF-8")
 
 
-def get_new_note_ids(col: anki.collection.Collection) -> list[int]:
+def get_new_note_ids(col: Collection) -> Sequence[NoteId]:
     """Get the ids of all new notes in the collection. While ignoring the decks specified in the config.
 
     Args:
@@ -41,7 +38,7 @@ def get_new_note_ids(col: anki.collection.Collection) -> list[int]:
     return col.find_notes(f"is:new {ignored_decks_query}")
 
 
-def get_new_unburied_cardIds(col: anki.collection.Collection) -> list[int]:
+def get_new_unburied_cardIds(col: Collection) -> Sequence[NoteId]:
     """Get the ids of all new unburied cards in the collection. While ignoring the decks specified in the config.
 
     Args:
@@ -107,8 +104,12 @@ def start_work(col: Collection):
 
         new_cards, learning_cards = classify_cards(siblings)
 
+        if not mw or not mw.col or not mw.col.sched:
+            raise Exception("SibPush : Anki is not initialized properly")
+
         if learning_cards:
             # Since there are learning cards of the same note, bury all new cards, minus those already buried
+
             cards_to_bury = [card for card in new_cards if card.queue >= 0]
 
             if not cards_to_bury:
@@ -151,13 +152,13 @@ def browser_render(browser: deckbrowser.DeckBrowser):
     start_work(browser.mw.col)
 
 
-def logThis(arg, clear=False):
+def logThis(arg: str | object, clear: bool=False):
     if conf_debug:
-        message = arg() if callable(arg) else arg
+        message: str = arg() if callable(arg) else arg
 
         # Clear the log file if the 'clear' flag is set
         if clear:
-            with open(LOG_FILE, "w", encoding="UTF-8") as f:
+            with open(LOG_FILE, "w", encoding="UTF-8"):
                 pass  # This will clear the file
 
         # Log the message using Python's logging module
