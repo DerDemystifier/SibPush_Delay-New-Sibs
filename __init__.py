@@ -7,10 +7,7 @@ from typing import Collection, Sequence, Callable
 from anki.cards import Card
 import anki
 from datetime import datetime
-
-
 import sys
-
 from .helper import (
     cards_details,
     classify_cards,
@@ -18,6 +15,8 @@ from .helper import (
     conf_ignored_decks,
 )
 import logging
+
+
 
 addon_path = os.path.dirname(os.path.realpath(__file__))
 
@@ -67,6 +66,9 @@ def get_siblings(note_id: int) -> Sequence[Card]:
     Returns:
         Sequence[Card]: The list of cards of the note.
     """
+
+    if not mw or not mw.col or not mw.col.db:
+        return
     card_ids = mw.col.db.list("select id from cards where nid=?", note_id)
     return [mw.col.get_card(card_id) for card_id in card_ids]
 
@@ -74,7 +76,7 @@ def get_siblings(note_id: int) -> Sequence[Card]:
 unburied_cards_ids = []
 
 
-def start_work(col: anki.collection.Collection):
+def start_work(col: Collection):
     """This is the main function. Start the work when the collection is loaded.
 
     Args:
