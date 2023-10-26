@@ -35,23 +35,7 @@ def get_new_note_ids(col: Collection) -> Sequence[NoteId]:
     ignored_decks_query = " ".join(
         [f"-deck:{deck}" for deck in conf_ignored_decks if deck]
     )
-    return col.find_notes(f"is:new {ignored_decks_query}")
-
-
-def get_new_unburied_cardIds(col: Collection) -> Sequence[NoteId]:
-    """Get the ids of all new unburied cards in the collection. While ignoring the decks specified in the config.
-
-    Args:
-        col (anki.collection.Collection): The collection to search in.
-
-    Returns:
-        list[int] : The list of ids of the found cards.
-    """
-    # ["abc", "efg"] → "-deck:abc -deck:efg"
-    ignored_decks_query = " ".join(
-        [f"-deck:{deck}" for deck in conf_ignored_decks if deck]
-    )
-    return col.find_cards(f"is:new -is:buried {ignored_decks_query}")
+    return col.find_notes(f"is:new -is:suspended {ignored_decks_query}")
 
 
 def get_siblings(note_id: int) -> Sequence[Card]:
@@ -70,7 +54,7 @@ def get_siblings(note_id: int) -> Sequence[Card]:
     return [mw.col.get_card(card_id) for card_id in card_ids]
 
 
-unburied_cards_ids = []
+new_note_ids = []
 
 
 def start_work(col: Collection):
@@ -80,15 +64,13 @@ def start_work(col: Collection):
         col (anki.collection.Collection): The collection to work on.
     """
 
-    # start check ... This is to prevent the function from running multiple times on the same new cards, so only run if the user has added new cards or unburied cards since the last time this function was called
-    global unburied_cards_ids
-    temp = get_new_unburied_cardIds(col)
-    if len(temp) == len(unburied_cards_ids):
+    # start check ... This is to prevent the function from running multiple times on the same new cards, so only run if the user has added new cards since the last time this function was called
+    global new_note_ids
+    temp = get_new_note_ids(col)
+    if len(temp) == len(new_note_ids):
         return
-    unburied_cards_ids = temp
+    new_note_ids = temp
     # end check
-
-    new_note_ids = get_new_note_ids(col)
 
     logThis(f"new_note_ids: {new_note_ids}")
     for new_note_id in new_note_ids:
