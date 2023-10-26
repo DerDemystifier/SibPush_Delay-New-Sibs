@@ -1,7 +1,7 @@
 import os
 from aqt import mw
 from aqt import gui_hooks, deckbrowser
-from typing import Sequence
+from typing import Sequence, Union
 from anki.cards import Card
 from anki.collection import Collection
 from datetime import datetime
@@ -152,7 +152,7 @@ def browser_render(browser: deckbrowser.DeckBrowser):
     start_work(browser.mw.col)
 
 
-def logThis(arg: str | object, clear: bool=False):
+def logThis(arg: Union[str, object], clear: bool = False):
     if conf_debug:
         message: str = arg() if callable(arg) else arg
 

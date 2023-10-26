@@ -12,7 +12,7 @@ config = mw.addonManager.getConfig(__name__)
 conf_debug = bool(config["debug"]) if config is not None else False
 conf_interval = int(config["interval"]) if config is not None else 0
 conf_ignored_decks: list[str] = (
-    config["ignored_decks"].strip().split(",")
+    list(config["ignored_decks"])
     if config is not None and config["ignored_decks"] is not None
     else []
 )
