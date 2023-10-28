@@ -1,25 +1,20 @@
 import os
 from aqt import mw
 from aqt import gui_hooks, deckbrowser
-from typing import Sequence, Union
+from typing import Sequence
 from anki.cards import Card
 from anki.collection import Collection
 from datetime import datetime
 from anki.notes import NoteId
+from .log_helper import logThis
 from .helper import (
     cards_details,
     classify_cards,
-    conf_debug,
     conf_ignored_decks,
 )
-import logging
 
 
 addon_path = os.path.dirname(os.path.realpath(__file__))
-
-LOG_FILE = os.path.join(addon_path, "log.txt")
-# Configure the logging setup
-logging.basicConfig(filename=LOG_FILE, level=logging.DEBUG, encoding="UTF-8")
 
 
 def get_new_note_ids(col: Collection) -> Sequence[NoteId]:
@@ -132,32 +127,3 @@ def start_work(col: Collection):
 def browser_render(browser: deckbrowser.DeckBrowser):
     logThis("deck_browser_did_render hook triggered!")
     start_work(browser.mw.col)
-
-
-def logThis(arg: Union[str, object], clear: bool = False):
-    if conf_debug:
-        message: str = arg() if callable(arg) else arg
-
-        # Clear the log file if the 'clear' flag is set
-        if clear:
-            with open(LOG_FILE, "w", encoding="UTF-8"):
-                pass  # This will clear the file
-
-        # Log the message using Python's logging module
-        logging.debug(message)
-
-
-logThis(
-    str(datetime.today())
-    + """
-# Legend for card details:
-#   Type: 0=new, 1=learning, 2=due
-#   Queue: same as above, and:
-#       -1=suspended, -2=user buried, -3=sched buried
-#   Due is used differently for different queues.
-#       new queue: position
-#       rev queue: integer day
-#       lrn queue: integer timestamp
-""",
-    True,
-)
