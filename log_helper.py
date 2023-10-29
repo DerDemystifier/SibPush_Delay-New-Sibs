@@ -1,8 +1,10 @@
 from datetime import datetime
 import os
 from typing import Union
-from .helper import (
-    conf_debug,
+
+from aqt.utils import tooltip
+from .config_parser import (
+    config_settings,
 )
 import logging
 
@@ -14,7 +16,8 @@ logging.basicConfig(filename=LOG_FILE, level=logging.DEBUG, encoding="UTF-8")
 
 
 def logThis(arg: Union[str, object], clear: bool = False):
-    if conf_debug:
+    tooltip(id(config_settings))
+    if config_settings["debug"]:
         message: str = arg() if callable(arg) else arg
 
         # Clear the log file if the 'clear' flag is set

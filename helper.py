@@ -1,21 +1,7 @@
 import json
 from typing import Sequence
 from anki.cards import Card
-from aqt import mw
-
-
-if not mw:
-    raise Exception("SibPush : Anki is not initialized properly")
-
-# Get the config object for your addon
-config = mw.addonManager.getConfig(__name__)
-conf_debug = bool(config["debug"]) if config is not None else False
-conf_interval = int(config["interval"]) if config is not None else 0
-conf_ignored_decks: list[str] = (
-    list(config["ignored_decks"])
-    if config is not None and config["ignored_decks"] is not None
-    else []
-)
+from .config_parser import config_settings
 
 
 # This function takes an array of cards and calls card_details on each of them
@@ -63,7 +49,7 @@ def classify_cards(siblings: Sequence[Card]) -> tuple[list[Card], list[Card]]:
 
         if sibling.type == 0:
             new_cards.append(sibling)
-        elif sibling.ivl < conf_interval:
+        elif sibling.ivl < config_settings["interval"]:
             learning_cards.append(sibling)
 
     return new_cards, learning_cards

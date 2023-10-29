@@ -1,17 +1,17 @@
 import os
 from aqt import mw
 from aqt import gui_hooks, deckbrowser
-from typing import Sequence
+from typing import Sequence, cast
 from anki.cards import Card
 from anki.collection import Collection
-from datetime import datetime
 from anki.notes import NoteId
+from .config_parser import on_config_save
 from .log_helper import logThis
 from .helper import (
     cards_details,
     classify_cards,
-    conf_ignored_decks,
 )
+from .config_parser import config_settings
 
 
 addon_path = os.path.dirname(os.path.realpath(__file__))
@@ -28,7 +28,11 @@ def get_new_note_ids(col: Collection) -> Sequence[NoteId]:
     """
     # ["abc", "efg"] → "-deck:abc -deck:efg"
     ignored_decks_query = " ".join(
-        [f"-deck:{deck}" for deck in conf_ignored_decks if deck]
+        [
+            f"-deck:{deck}"
+            for deck in cast(str, config_settings["ignored_decks"])
+            if deck
+        ]
     )
     return col.find_notes(f"is:new -is:suspended {ignored_decks_query}")
 
@@ -127,3 +131,6 @@ def start_work(col: Collection):
 def browser_render(browser: deckbrowser.DeckBrowser):
     logThis("deck_browser_did_render hook triggered!")
     start_work(browser.mw.col)
+
+
+gui_hooks.addon_config_editor_will_update_json.append(on_config_save)
