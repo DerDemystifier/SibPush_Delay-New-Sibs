@@ -4,8 +4,8 @@ from anki.cards import Card
 from .config_parser import config_settings
 
 
-# This function takes an array of cards and calls card_details on each of them
 def cards_details(cards: Sequence[Card]) -> str:
+    """This function takes an array of cards and calls card_details on each of them"""
     return "[\n" + "\n".join([card_details(card) for card in cards]) + "\n]"
 
 

@@ -2,10 +2,7 @@ from datetime import datetime
 import os
 from typing import Union
 
-from aqt.utils import tooltip
-from .config_parser import (
-    config_settings,
-)
+
 import logging
 
 addon_path = os.path.dirname(os.path.realpath(__file__))
@@ -16,7 +13,14 @@ logging.basicConfig(filename=LOG_FILE, level=logging.DEBUG, encoding="UTF-8")
 
 
 def logThis(arg: Union[str, object], clear: bool = False):
-    tooltip(id(config_settings))
+    """Logs the given message to a log file.
+
+    Args:
+        arg (Union[str, object]): The message to log. If this is a function, it will be called and the return value will be logged.
+        clear (bool, optional): If True, the log file will be cleared before the message is logged. Defaults to False.
+    """
+    from .config_parser import config_settings
+
     if config_settings["debug"]:
         message: str = arg() if callable(arg) else arg
 

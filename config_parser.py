@@ -1,13 +1,15 @@
 import json
 from typing import Union
 from aqt import mw
-from aqt.utils import tooltip
+from .log_helper import logThis
 
 if not mw:
     raise Exception("SibPush : Anki is not initialized properly")
 
 
-def parse_config(config: Union[dict[str, object], None]) -> tuple[bool, int, list[str]]:
+def parse_config(
+    config: Union[dict[str, object], None]
+) -> dict[str, Union[bool, int, list[str]]]:
     """Parse the config object and return the values for debug, interval and ignored_decks.
 
     Args:
@@ -33,16 +35,23 @@ def parse_config(config: Union[dict[str, object], None]) -> tuple[bool, int, lis
 
 # Get the config object for your addon
 config = mw.addonManager.getConfig(__name__)
-config_settings: dict[str, Union[bool, int, list[str]]] = {
-    "debug": False,
-    "interval": 0,
-    "ignored_decks": [],
-}
-config_settings.update(parse_config(config))
+config_settings = parse_config(config)
 
 
 def on_config_save(text: str, addon: str) -> None:
-    from .log_helper import logThis
+    """
+    This function is triggered when the addon_config_editor_will_save_json hook is called.
+    It parses the text argument as json, updates the global config_settings dictionary with the parsed config,
+    and returns the text to be saved to config.json.
+
+    Args:
+        text (str): The text to be parsed as json.
+        addon (str): The name of the addon.
+
+    Returns:
+        str: The text to be saved to config.json.
+    """
+
 
     global config_settings
 
@@ -50,9 +59,11 @@ def on_config_save(text: str, addon: str) -> None:
 
     # Parse text argument as json
     config: dict[str, object] = json.loads(text)
-    config_settings.update(parse_config(config))
+    old_debug = config_settings["debug"]
+    config_settings |= parse_config(config)
 
-    tooltip(id(config_settings))
+    if config_settings["debug"] != old_debug:
+        logThis("Debug mode is now " + ("enabled" if config_settings["debug"] else "disabled"))
 
     # Return the text to be saved to config.json
     return text
