@@ -1,8 +1,6 @@
 from datetime import datetime
 import os
 from typing import Union
-
-
 import logging
 
 addon_path = os.path.dirname(os.path.realpath(__file__))
@@ -33,9 +31,11 @@ def logThis(arg: Union[str, object], clear: bool = False):
         logging.debug(message)
 
 
-logThis(
-    str(datetime.today())
-    + """
+def initialize_log_file():
+    """Initializes the log file by writing the current date and time to it."""
+    logThis(
+        str(datetime.today())
+        + """
 # Legend for card details:
 #   Type: 0=new, 1=learning, 2=due
 #   Queue: same as above, and:
@@ -45,5 +45,5 @@ logThis(
 #       rev queue: integer day
 #       lrn queue: integer timestamp
 """,
-    True,
-)
+        True,
+    )

@@ -1,7 +1,7 @@
 import json
 from typing import Union
 from aqt import mw
-from .log_helper import logThis
+from . import log_helper
 
 if not mw:
     raise Exception("SibPush : Anki is not initialized properly")
@@ -25,6 +25,8 @@ def parse_config(
         if config is not None and config["ignored_decks"] is not None
         else []
     )
+
+    log_helper.logThis(f"Config parsed successfully! :: {config}")
 
     return {
         "debug": debug,
@@ -52,18 +54,18 @@ def on_config_save(text: str, addon: str) -> None:
         str: The text to be saved to config.json.
     """
 
-
     global config_settings
 
-    logThis("addon_config_editor_will_save_json hook triggered!")
+    log_helper.logThis("addon_config_editor_will_save_json hook triggered!")
 
     # Parse text argument as json
     config: dict[str, object] = json.loads(text)
-    old_debug = config_settings["debug"]
+    debug_before = config_settings["debug"]
     config_settings |= parse_config(config)
 
-    if config_settings["debug"] != old_debug:
-        logThis("Debug mode is now " + ("enabled" if config_settings["debug"] else "disabled"))
+    if config_settings["debug"] and config_settings["debug"] != debug_before:
+        # If debug is enabled and it was not enabled before, initialize the log file
+        log_helper.initialize_log_file()
 
     # Return the text to be saved to config.json
     return text

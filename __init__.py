@@ -6,7 +6,7 @@ from anki.cards import Card
 from anki.collection import Collection
 from anki.notes import NoteId
 from .config_parser import on_config_save
-from .log_helper import logThis
+from .log_helper import logThis, initialize_log_file
 from .helper import (
     cards_details,
     classify_cards,
@@ -121,10 +121,9 @@ def start_work(col: Collection):
             mw.col.sched.bury_cards(card_ids_to_bury, manual=True)
 
 
-# @gui_hooks.collection_did_load.append
-# def collection_did_load(col: anki.collection.Collection):
-#     logThis("collection_did_load hook triggered!")
-#     start_work(col)
+@gui_hooks.collection_did_load.append
+def collection_did_load(col: Collection):
+    initialize_log_file()
 
 
 @gui_hooks.deck_browser_did_render.append
