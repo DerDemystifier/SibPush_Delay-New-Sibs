@@ -5,13 +5,12 @@ from typing import Sequence, cast
 from anki.cards import Card
 from anki.collection import Collection
 from anki.notes import NoteId
-from .config_parser import on_config_save
 from .log_helper import logThis, initialize_log_file
 from .helper import (
     cards_details,
     classify_cards,
 )
-from .config_parser import config_settings
+from .config_parser import config_settings, on_config_save
 
 
 addon_path = os.path.dirname(os.path.realpath(__file__))
@@ -29,7 +28,7 @@ def get_new_note_ids(col: Collection) -> Sequence[NoteId]:
     # ["abc", "efg"] → "-deck:abc -deck:efg"
     ignored_decks_query = " ".join(
         [
-            f"-deck:{deck}"
+            f'-deck:"{deck}"'
             for deck in cast(str, config_settings["ignored_decks"])
             if deck
         ]

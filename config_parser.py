@@ -26,8 +26,6 @@ def parse_config(
         else []
     )
 
-    log_helper.logThis(f"Config parsed successfully! :: {config}")
-
     return {
         "debug": debug,
         "interval": interval,
@@ -66,6 +64,7 @@ def on_config_save(text: str, addon: str) -> None:
     if config_settings["debug"] and config_settings["debug"] != debug_before:
         # If debug is enabled and it was not enabled before, initialize the log file
         log_helper.initialize_log_file()
+        log_helper.logThis(f"Config parsed successfully! :: {config}")
 
     # Return the text to be saved to config.json
     return text
