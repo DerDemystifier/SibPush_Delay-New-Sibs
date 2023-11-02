@@ -65,7 +65,7 @@ def start_work(col: Collection):
     # start check ... This is to prevent the function from running multiple times on the same new cards, so only run if the user has added new cards since the last time this function was called
     global new_note_ids
     temp = get_new_note_ids(col)
-    if len(temp) == len(new_note_ids):
+    if len(temp) <= len(new_note_ids):
         return
     new_note_ids = temp
     # end check
