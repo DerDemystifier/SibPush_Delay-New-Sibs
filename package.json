@@ -1,0 +1,32 @@
+{
+    "name": "sibpush_delay-new-sibs",
+    "version": "1.0.0",
+    "description": "Anki Addon to delay new Sibs",
+    "main": "index.js",
+    "directories": {
+        "doc": "docs"
+    },
+    "scripts": {
+        "convert": "generate-md --layout mixu-page --input README.md --output ./docs"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/DerDemystifier/SibPush_Delay-New-Sibs.git"
+    },
+    "keywords": [
+        "Anki",
+        "Addon",
+        "Delay",
+        "New",
+        "Cards"
+    ],
+    "author": "Bassim ELBAKKALI ELGAZAUNI",
+    "license": "BSD-3-Clause",
+    "bugs": {
+        "url": "https://github.com/DerDemystifier/SibPush_Delay-New-Sibs/issues"
+    },
+    "homepage": "https://github.com/DerDemystifier/SibPush_Delay-New-Sibs#readme",
+    "devDependencies": {
+        "markdown-styles": "^3.2.0"
+    }
+}
