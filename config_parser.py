@@ -38,7 +38,7 @@ config = mw.addonManager.getConfig(__name__)
 config_settings = parse_config(config)
 
 
-def on_config_save(text: str, addon: str) -> None:
+def on_config_save(config_text: str, addon: str) -> None:
     """
     This function is triggered when the addon_config_editor_will_save_json hook is called.
     It parses the text argument as json, updates the global config_settings dictionary with the parsed config,
@@ -54,10 +54,14 @@ def on_config_save(text: str, addon: str) -> None:
 
     global config_settings
 
+    if addon != "SibPush_Delay-New-Sibs":
+        # If the addon name is not mine, return the text to be saved to config.json
+        return config_text
+
     log_helper.logThis("addon_config_editor_will_save_json hook triggered!")
 
     # Parse text argument as json
-    config: dict[str, object] = json.loads(text)
+    config: dict[str, object] = json.loads(config_text)
     debug_before = config_settings["debug"]
     config_settings |= parse_config(config)
 
@@ -67,4 +71,4 @@ def on_config_save(text: str, addon: str) -> None:
         log_helper.logThis(f"Config parsed successfully! :: {config}")
 
     # Return the text to be saved to config.json
-    return text
+    return config_text

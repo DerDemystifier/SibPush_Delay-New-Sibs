@@ -25,7 +25,7 @@
     "bugs": {
         "url": "https://github.com/DerDemystifier/SibPush_Delay-New-Sibs/issues"
     },
-    "homepage": "https://github.com/DerDemystifier/SibPush_Delay-New-Sibs#readme",
+    "homepage": "https://github.com/DerDemystifier/SibPush_Delay-New-Sibs",
     "devDependencies": {
         "markdown-styles": "^3.2.0"
     }
