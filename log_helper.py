@@ -1,13 +1,14 @@
 from datetime import datetime
 import os
+from pathlib import Path
 from typing import Union
 import logging
 
 addon_path = os.path.dirname(os.path.realpath(__file__))
 
-LOG_FILE = os.path.join(addon_path, "log.txt")
+LOG_FILE_path = os.path.join(addon_path, "log.txt")
 # Configure the logging setup
-logging.basicConfig(filename=LOG_FILE, level=logging.DEBUG, encoding="UTF-8")
+logging.basicConfig(filename=LOG_FILE_path, level=logging.DEBUG, encoding="UTF-8")
 
 
 def logThis(arg: Union[str, object], clear: bool = False):
@@ -19,12 +20,12 @@ def logThis(arg: Union[str, object], clear: bool = False):
     """
     from .config_parser import config_settings
 
-    if config_settings["debug"]:
+    if config_settings["debug"] and Path(LOG_FILE_path).exists():
         message: str = arg() if callable(arg) else arg
 
         # Clear the log file if the 'clear' flag is set
         if clear:
-            with open(LOG_FILE, "w", encoding="UTF-8"):
+            with open(LOG_FILE_path, "w", encoding="UTF-8"):
                 pass  # This will clear the file
 
         # Log the message using Python's logging module

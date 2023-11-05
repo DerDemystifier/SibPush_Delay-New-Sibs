@@ -1,6 +1,8 @@
+import logging
 import os
 from aqt import mw
 from aqt import gui_hooks, deckbrowser
+from aqt.addons import AddonsDialog
 from typing import Sequence, cast
 from anki.cards import Card
 from anki.collection import Collection
@@ -132,3 +134,8 @@ def browser_render(browser: deckbrowser.DeckBrowser):
 
 
 gui_hooks.addon_config_editor_will_update_json.append(on_config_save)
+
+
+@gui_hooks.addons_dialog_will_delete_addons.append
+def on_addon_delete(dialog: AddonsDialog, ids: list[str]):
+    logging.shutdown()
