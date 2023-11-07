@@ -11,6 +11,7 @@ Meet SibPush, your Anki addon that likes to keep new sibling cards at a chill di
 ## Purpose
 
 So here’s the deal. Normally when you bump into a new card, Anki shoves its siblings to the side for just a day. Not cool, right? SibPush steps in to save the "spaced" in spaced repetition. It makes sure all the siblings have had their share of the spotlight, passing the set interval before any new faces show up. This way, you get to avoid cramming and actually remember stuff long-term. It’s all about keeping the learning groove going at a neat pace.
+Note: It's also compatible with V3 Scheduler.
 
 ## Configuration
 
@@ -24,7 +25,7 @@ The configuration of SibPush is straightforward and can be tailored to meet your
 
 ## Usage
 
-1. Install the addon at .
+1. Install the addon at [Anki Addons](https://ankiweb.net/shared/info/1856111213) .
 2. That's it! Review your decks as usual, and SibPush will take care of the rest, ensuring that new cards are introduced at the right time.
 
 Happy studying!
