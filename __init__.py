@@ -5,7 +5,7 @@ from aqt import gui_hooks, deckbrowser
 from aqt.addons import AddonsDialog
 from typing import Sequence, cast
 from anki.cards import Card
-from anki.collection import Collection
+from anki.collection import Collection, BrowserColumns
 from anki.notes import NoteId
 from .log_helper import logThis, initialize_log_file
 from .helper import (
@@ -49,12 +49,18 @@ def get_siblings(note_id: int) -> Sequence[Card]:
     """
 
     if not mw or not mw.col or not mw.col.db:
-        return
-    card_ids = mw.col.db.list("select id from cards where nid=?", note_id)
+        raise Exception("SibPush : Anki is not initialized properly")
+
+    card_ids = mw.col.find_cards(query=f"nid:{note_id}", order=due_column)
+
+    # You can also conduct searches using the db connection directly
+    # card_ids = mw.col.db.list("select id from cards where nid=?", note_id)
+
     return [mw.col.get_card(card_id) for card_id in card_ids]
 
 
-new_note_ids = []
+new_note_ids: Sequence[NoteId] = []
+due_column: BrowserColumns.Column
 
 
 def start_work(col: Collection):
@@ -65,12 +71,21 @@ def start_work(col: Collection):
     """
 
     # start check ... This is to prevent the function from running multiple times on the same new cards, so only run if the user has added new cards since the last time this function was called
-    global new_note_ids
+    global new_note_ids, due_column
+
     temp = get_new_note_ids(col)
     if len(temp) <= len(new_note_ids):
         return
     new_note_ids = temp
     # end check
+
+    if not mw or not mw.col:
+        raise Exception("SibPush : Anki is not initialized properly")
+
+    all_browser_columns = mw.col.all_browser_columns()
+
+    # Find the BrowserColumn for the due date
+    due_column = next(col for col in all_browser_columns if col.key == "cardDue")
 
     logThis(f"new_note_ids: {new_note_ids}")
     for new_note_id in new_note_ids:
