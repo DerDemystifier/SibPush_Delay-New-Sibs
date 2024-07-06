@@ -101,9 +101,6 @@ def start_work(col: Collection):
 
         new_cards, learning_cards = classify_cards(siblings)
 
-        if not mw or not mw.col or not mw.col.sched:
-            raise Exception("SibPush : Anki is not initialized properly")
-
         if learning_cards:
             # Since there are learning cards of the same note, bury all new cards, minus those already buried
 
@@ -137,14 +134,18 @@ def start_work(col: Collection):
             mw.col.sched.bury_cards(card_ids_to_bury, manual=True)
 
 
-@gui_hooks.collection_did_load.append
+@gui_hooks.collection_did_load.append  # type: ignore
 def collection_did_load(col: Collection):
     initialize_log_file()
 
 
-@gui_hooks.deck_browser_did_render.append
+@gui_hooks.deck_browser_did_render.append  # type: ignore
 def browser_render(browser: deckbrowser.DeckBrowser):
     logThis("deck_browser_did_render hook triggered!")
+
+    if not browser or not browser.mw.col:
+        raise Exception("SibPush : Anki is not initialized properly")
+
     start_work(browser.mw.col)
 
 

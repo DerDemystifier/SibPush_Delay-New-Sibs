@@ -2,5 +2,5 @@
 __pycache__/
 node_modules/
 log.txt
-commit*.bat
+-ignore-*
 meta.json

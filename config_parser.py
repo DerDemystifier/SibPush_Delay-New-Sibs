@@ -1,5 +1,5 @@
 import json
-from typing import Union
+from typing import Any, Union
 from aqt import mw
 from . import log_helper
 
@@ -8,7 +8,7 @@ if not mw:
 
 
 def parse_config(
-    config: Union[dict[str, object], None]
+    config: Union[dict[str, Any], None]
 ) -> dict[str, Union[bool, int, list[str]]]:
     """Parse the config object and return the values for debug, interval and ignored_decks.
 
@@ -38,7 +38,7 @@ config = mw.addonManager.getConfig(__name__)
 config_settings = parse_config(config)
 
 
-def on_config_save(config_text: str, addon: str) -> None:
+def on_config_save(config_text: str, addon: str) -> str:
     """
     This function is triggered when the addon_config_editor_will_save_json hook is called.
     It parses the text argument as json, updates the global config_settings dictionary with the parsed config,
