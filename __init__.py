@@ -2,9 +2,8 @@ import logging
 import os
 from datetime import date
 from aqt import mw
-from aqt import gui_hooks, deckbrowser
-from aqt.addons import AddonsDialog
-from typing import Sequence, cast
+from aqt import gui_hooks
+from typing import Any, Sequence, cast
 from anki.cards import Card
 from anki.collection import Collection, BrowserColumns
 from anki.notes import NoteId
@@ -204,7 +203,7 @@ def collection_did_load(col: Collection):
 
 
 @gui_hooks.deck_browser_did_render.append  # type: ignore
-def browser_render(browser: deckbrowser.DeckBrowser):
+def browser_render(browser: Any):
     logThis("deck_browser_did_render hook triggered!")
 
     if not browser or not browser.mw.col:
@@ -217,5 +216,5 @@ gui_hooks.addon_config_editor_will_update_json.append(on_config_save)
 
 
 @gui_hooks.addons_dialog_will_delete_addons.append
-def on_addon_delete(dialog: AddonsDialog, ids: list[str]):
+def on_addon_delete(dialog: Any, ids: list[str]):
     logging.shutdown()

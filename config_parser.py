@@ -3,9 +3,6 @@ from typing import Any, Union
 from aqt import mw
 from . import log_helper
 
-if not mw:
-    raise Exception("SibPush : Anki is not initialized properly")
-
 
 def parse_config(
     config: Union[dict[str, Any], None]
@@ -34,7 +31,8 @@ def parse_config(
 
 
 # Get the config object for your addon
-config = mw.addonManager.getConfig(__name__)
+addon_manager = getattr(mw, "addonManager", None) if mw else None
+config = addon_manager.getConfig(__name__) if addon_manager is not None else None
 config_settings = parse_config(config)
 
 
