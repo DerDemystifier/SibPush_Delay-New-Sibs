@@ -5,7 +5,7 @@ from aqt import mw
 from aqt import gui_hooks
 from typing import Any, Sequence, cast
 from anki.cards import Card
-from anki.collection import Collection, BrowserColumns
+from anki.collection import CARD_TYPE_NEW, QUEUE_TYPE_SUSPENDED, Collection, BrowserColumns
 from anki.notes import NoteId
 from .log_helper import logThis, initialize_log_file
 from .helper import (
@@ -137,7 +137,7 @@ def start_work(col: Collection):
 
         logThis(lambda: f"`Siblings within nid:{new_note_id} → {cards_details(siblings)}")
 
-        all_new_cards = [card for card in siblings if card.type == 0]
+        all_new_cards = [card for card in siblings if card.type == CARD_TYPE_NEW]
         new_cards, immature_cards = classify_cards(siblings)
         note = siblings[0].note()
 
@@ -147,7 +147,8 @@ def start_work(col: Collection):
             cards_to_suspend = [
                 card
                 for card in new_cards
-                if card.queue != -1  # card.queue == -1 means the card is already suspended.
+                if card.queue
+                != QUEUE_TYPE_SUSPENDED  # card.queue == QUEUE_TYPE_SUSPENDED means the card is already suspended.
             ]  # We don't want to add the tag (by calling suspend_new_cards()) to a note if all cards are manually suspended.
 
             if not cards_to_suspend:
@@ -165,20 +166,25 @@ def start_work(col: Collection):
             if note.has_tag(SUSPENDED_BY_ADDON_TAG):
                 # This means that some new cards of this note were previously suspended by the addon, so we can safely unsuspend the first card and suspend the rest (if not already suspended).
                 first_card = all_new_cards[0]
-                if first_card.queue == -1:
+                if first_card.queue == QUEUE_TYPE_SUSPENDED:
                     logThis(
                         lambda: f"\t\tUnsuspending first new card from nid:{new_note_id} →: {cards_details([first_card])}\n"
                     )
                     col.sched.unsuspend_cards([first_card.id])
+                    col.sched.bury_cards(
+                        ids=[first_card.id], manual=False
+                    )  # Bury the card to not review right after after unsuspending
 
                 # No need to re-suspend the others; they are already suspended.
                 cards_to_suspend = []
             else:
                 # If the note is not tagged as addon-managed, this means that this is a new note. So we should keep the first card available and suspend the rest (if not already suspended).
 
-                cards_to_suspend = [card for card in all_new_cards[1:] if card.queue != -1]
+                cards_to_suspend = [
+                    card for card in all_new_cards[1:] if card.queue != QUEUE_TYPE_SUSPENDED
+                ]
                 # first_active_index = next(
-                #     (index for index, card in enumerate(all_new_cards) if card.queue != -1),
+                #     (index for index, card in enumerate(all_new_cards) if card.queue != QUEUE_TYPE_SUSPENDED),
                 #     None,
                 # )
 
@@ -186,7 +192,7 @@ def start_work(col: Collection):
                 #     continue
 
                 # cards_to_suspend = [
-                #     card for card in all_new_cards[first_active_index + 1 :] if card.queue != -1
+                #     card for card in all_new_cards[first_active_index + 1 :] if card.queue != QUEUE_TYPE_SUSPENDED
                 # ]
 
             if not cards_to_suspend:

@@ -5,6 +5,7 @@ from .card_utils import assert_card_queues, set_review_card_state
 from .collection_utils import temporary_collection
 from .note_utils import add_note_with_siblings, build_test_notetype, make_test_deck_id
 from .print_utils import print_collection_state
+from anki.consts import QUEUE_TYPE_NEW, QUEUE_TYPE_REV, QUEUE_TYPE_SUSPENDED
 
 
 def test_leaves_one_new_card_when_all_siblings_mature() -> None:
@@ -34,7 +35,7 @@ def test_leaves_one_new_card_when_all_siblings_mature() -> None:
 
         print_collection_state(col, "After processing (One New Card left active)")
 
-        assert_card_queues(col, cards, [2, 0, -1])
+        assert_card_queues(col, cards, [QUEUE_TYPE_REV, QUEUE_TYPE_NEW, QUEUE_TYPE_SUSPENDED])
         assert col.get_note(note.id).has_tag(addon.SUSPENDED_BY_ADDON_TAG)
 
 

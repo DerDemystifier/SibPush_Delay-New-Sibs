@@ -1,6 +1,6 @@
 import json
 from typing import Sequence
-from anki.cards import Card
+from anki.cards import CARD_TYPE_NEW, QUEUE_TYPE_SUSPENDED, Card
 from .config_parser import config_settings
 
 
@@ -43,11 +43,11 @@ def classify_cards(siblings: Sequence[Card]) -> tuple[list[Card], list[Card]]:
     new_cards: list[Card] = []
     immature_cards: list[Card] = []
     for sibling in siblings:
-        if sibling.queue == -1:
+        if sibling.queue == QUEUE_TYPE_SUSPENDED:
             # This means the card is suspended, so we don't care about it
             continue
 
-        if sibling.type == 0:
+        if sibling.type == CARD_TYPE_NEW:
             new_cards.append(sibling)
         elif sibling.ivl < config_settings["interval"]:
             immature_cards.append(sibling)

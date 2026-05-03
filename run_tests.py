@@ -21,7 +21,7 @@ def main() -> None:
         print("\n\n")
         print(f"[↓ RUNNING TEST ↓] : {test_name}")
         test_func()
-        print(f"[↑ TEST COMPLETE ↑] : {test_name}")
+        print(f"[↑ TEST SUCCESSFUL ↑] : {test_name}")
 
 
 if __name__ == "__main__":
