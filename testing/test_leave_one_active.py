@@ -7,7 +7,7 @@ from .note_utils import add_note_with_siblings, build_test_notetype, make_test_d
 from .print_utils import print_collection_state
 
 
-def test_start_work_leaves_one_new_card_active_when_all_siblings_are_mature() -> None:
+def test_leaves_one_new_card_when_all_siblings_mature() -> None:
     """
     Scenario: All Siblings are Mature
 
@@ -38,12 +38,5 @@ def test_start_work_leaves_one_new_card_active_when_all_siblings_are_mature() ->
         assert col.get_note(note.id).has_tag(addon.SUSPENDED_BY_ADDON_TAG)
 
 
-def run() -> None:
-    print("\n\n")
-    print("[↓Running↓] test_start_work_leaves_one_new_card_active_when_all_siblings_are_mature")
-    test_start_work_leaves_one_new_card_active_when_all_siblings_are_mature()
-    print("[↑OK↑] test_start_work_leaves_one_new_card_active_when_all_siblings_are_mature")
-
-
 if __name__ == "__main__":
-    run()
+    test_leaves_one_new_card_when_all_siblings_mature()
