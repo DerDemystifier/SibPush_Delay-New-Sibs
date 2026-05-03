@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Protocol, cast
+from anki.cards import QUEUE_TYPE_LRN, QUEUE_TYPE_MANUALLY_BURIED, QUEUE_TYPE_NEW, QUEUE_TYPE_REV, QUEUE_TYPE_SIBLING_BURIED, QUEUE_TYPE_SUSPENDED
 
 if TYPE_CHECKING:
     from anki.collection import Collection
@@ -53,14 +54,18 @@ def print_collection_state(col: Collection, header: str = "Collection State") ->
             cards = note.cards()
             for card in cards:
                 status = ""
-                if card.queue == -1:
+                if card.queue == QUEUE_TYPE_SUSPENDED:
                     status = " [SUSPENDED]"
-                elif card.queue == 0:
+                elif card.queue == QUEUE_TYPE_NEW:
                     status = " [NEW]"
-                elif card.queue == 2:
+                elif card.queue == QUEUE_TYPE_REV:
                     status = " [REVIEW]"
-                elif card.queue == 1:
+                elif card.queue == QUEUE_TYPE_LRN:
                     status = " [LEARN]"
+                elif card.queue == QUEUE_TYPE_MANUALLY_BURIED:
+                    status = " [MANUALLY BURIED]"
+                elif card.queue == QUEUE_TYPE_SIBLING_BURIED:
+                    status = " [SIBLING BURIED]"
 
                 # Interval/Due info
                 ivl_info = f"Ivl: {card.ivl}d" if card.type == 2 else "New"
