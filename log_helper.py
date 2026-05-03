@@ -21,7 +21,7 @@ def logThis(arg: Union[str, object], clear: bool = False):
     from .config_parser import config_settings
 
     if config_settings["debug"] and Path(LOG_FILE_path).exists():
-        message: str = arg() if callable(arg) else arg
+        message: str = str(arg() if callable(arg) else arg)
 
         # Clear the log file if the 'clear' flag is set
         if clear:

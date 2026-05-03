@@ -32,16 +32,16 @@ def card_details(card: Card) -> str:
 
 
 def classify_cards(siblings: Sequence[Card]) -> tuple[list[Card], list[Card]]:
-    """Classify cards into new and learning cards.
+    """Classify cards into new and immature cards.
 
     Args:
         siblings (Sequence[Card]): The cards to classify
 
     Returns:
-        tuple: A tuple of two lists. The first list contains the new cards, the second list contains the learning cards.
+        tuple: A tuple of two lists. The first list contains the new cards, the second list contains the immature cards.
     """
     new_cards: list[Card] = []
-    learning_cards: list[Card] = []
+    immature_cards: list[Card] = []
     for sibling in siblings:
         if sibling.queue == -1:
             # This means the card is suspended, so we don't care about it
@@ -50,6 +50,6 @@ def classify_cards(siblings: Sequence[Card]) -> tuple[list[Card], list[Card]]:
         if sibling.type == 0:
             new_cards.append(sibling)
         elif sibling.ivl < config_settings["interval"]:
-            learning_cards.append(sibling)
+            immature_cards.append(sibling)
 
-    return new_cards, learning_cards
+    return new_cards, immature_cards
