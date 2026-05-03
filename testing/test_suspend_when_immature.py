@@ -7,7 +7,7 @@ from .note_utils import add_note_with_siblings, build_test_notetype, make_test_d
 from .print_utils import print_collection_state
 
 
-def test_start_work_suspends_new_cards_when_an_immature_sibling_exists() -> None:
+def test_suspend_new_cards_if_immature_sibling_exists() -> None:
     """
     Scenario: Immature Sibling Exists
 
@@ -48,12 +48,5 @@ def test_start_work_suspends_new_cards_when_an_immature_sibling_exists() -> None
         assert col.get_note(control_note.id).has_tag(addon.SUSPENDED_BY_ADDON_TAG)
 
 
-def run() -> None:
-    print("\n\n")
-    print("[↓Running↓] test_start_work_suspends_new_cards_when_an_immature_sibling_exists")
-    test_start_work_suspends_new_cards_when_an_immature_sibling_exists()
-    print("[↑OK↑] test_start_work_suspends_new_cards_when_an_immature_sibling_exists")
-
-
 if __name__ == "__main__":
-    run()
+    test_suspend_new_cards_if_immature_sibling_exists()
