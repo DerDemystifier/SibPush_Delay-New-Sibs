@@ -19,5 +19,11 @@
 ## `interval`
 
 -   **Type**: Integer
--   **Description**: Defines the interval (in days) required for a card to be considered "matured". Once a card has matured, new sibling cards become eligible for study.
+-   **Description**: Defines the interval (in days) required for a card to be considered "matured". Once a card has matured, new sibling cards become eligible for study and addon-managed suspended siblings can be restored.
 -   **Example**: `"interval": 21`
+
+## Suspension lifecycle
+
+-   SibPush marks addon-managed suspended notes with the `SibPush_suspended` tag.
+-   On the next deck browser render, SibPush checks tagged notes again and unsuspends the addon-managed cards whose remaining siblings are mature.
+-   Manually suspended cards are left alone by SibPush.

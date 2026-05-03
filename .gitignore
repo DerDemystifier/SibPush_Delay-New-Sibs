@@ -2,5 +2,6 @@
 __pycache__/
 node_modules/
 log.txt
--ignore-*
+_-*
 meta.json
+.github
