@@ -5,7 +5,11 @@ from .card_utils import assert_card_queues, set_review_card_state
 from .collection_utils import temporary_collection
 from .note_utils import add_note_with_siblings, build_test_notetype, make_test_deck_id
 from .print_utils import print_collection_state
-from anki.consts import QUEUE_TYPE_NEW, QUEUE_TYPE_REV, QUEUE_TYPE_SUSPENDED
+from anki.consts import (
+    QUEUE_TYPE_REV,
+    QUEUE_TYPE_NEW,
+    QUEUE_TYPE_SUSPENDED,
+)
 
 
 def test_suspend_new_cards_if_immature_sibling_exists() -> None:
@@ -39,12 +43,16 @@ def test_suspend_new_cards_if_immature_sibling_exists() -> None:
         print_collection_state(col, "Before processing (Immature vs Mature)")
 
         with patched_addon_state(col) as patched_addon:
-            patched_addon.start_work(col)
+            patched_addon.process_all_notes(col)
 
         print_collection_state(col, "After processing (Immature vs Mature)")
 
-        assert_card_queues(col, target_cards, [QUEUE_TYPE_REV, QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_SUSPENDED])
-        assert_card_queues(col, control_cards, [QUEUE_TYPE_REV, QUEUE_TYPE_NEW, QUEUE_TYPE_SUSPENDED])
+        assert_card_queues(
+            col, target_cards, [QUEUE_TYPE_REV, QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_SUSPENDED]
+        )
+        assert_card_queues(
+            col, control_cards, [QUEUE_TYPE_REV, QUEUE_TYPE_NEW, QUEUE_TYPE_SUSPENDED]
+        )
         assert col.get_note(target_note.id).has_tag(addon.SUSPENDED_BY_ADDON_TAG)
         assert col.get_note(control_note.id).has_tag(addon.SUSPENDED_BY_ADDON_TAG)
 

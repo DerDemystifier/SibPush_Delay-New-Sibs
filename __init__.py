@@ -39,7 +39,7 @@ def get_new_note_ids(col: Collection) -> Sequence[NoteId]:
     return col.find_notes(f"is:new {ignored_decks_query}")
 
 
-def get_child_cards(note_id: int) -> Sequence[Card]:
+def get_child_cards(col: Collection, note_id: int) -> Sequence[Card]:
     """Get all child cards of a note.
 
     Args:
@@ -53,7 +53,7 @@ def get_child_cards(note_id: int) -> Sequence[Card]:
         raise Exception("SibPush : Anki is not initialized properly")
 
     # Set order by the due date in the browser, so that we can get the cards in their due order.
-    card_ids = mw.col.find_cards(query=f"nid:{note_id}", order=due_column)
+    card_ids = col.find_cards(query=f"nid:{note_id}", order=get_due_column(col))
 
     # You can also conduct searches using the db connection directly
     # card_ids = mw.col.db.list("select id from cards where nid=?", note_id)
@@ -61,14 +61,36 @@ def get_child_cards(note_id: int) -> Sequence[Card]:
     return [mw.col.get_card(card_id) for card_id in card_ids]
 
 
-due_column: BrowserColumns.Column
+due_column: BrowserColumns.Column | None = None
 last_checked_state: tuple[str, Sequence[NoteId]] | None = None
+
+
+def get_due_column(col: Collection) -> BrowserColumns.Column:
+    """Return the browser column used to sort cards by due date."""
+
+    global due_column
+
+    if due_column is None:
+        all_browser_columns = col.all_browser_columns()
+        due_column = next(
+            (column for column in all_browser_columns if column.key == "cardDue"), None
+        )
+        if due_column is None:
+            raise Exception("SibPush : Could not find the due browser column")
+
+    assert due_column is not None
+    return due_column
 
 
 def should_run_work(col: Collection) -> tuple[bool, tuple[str, Sequence[NoteId]]]:
     """Determine whether the addon should run the processing of notes in the current hook call.
 
     The addon should run the processing of notes if either the date has changed since the last check (for users who never close Anki), or if there are new notes that were just added. This is to avoid unnecessary processing on every render pass.
+
+    Args:
+        col (anki.collection.Collection): The collection to check for new notes.
+    Returns:
+        tuple[bool, tuple[str, Sequence[NoteId]]]: A tuple where the first element is a boolean indicating whether to run the processing, and the second element is the current state (**current date** and **list of new note ids**) to be used for future comparisons.
     """
 
     today = date.today().isoformat()
@@ -84,7 +106,7 @@ def should_run_work(col: Collection) -> tuple[bool, tuple[str, Sequence[NoteId]]
     return should_run, (today, current_new_note_ids)
 
 
-def suspend_new_cards(col: Collection, cards_to_suspend: Sequence[Card], note_id: int):
+def suspend_cards(col: Collection, cards_to_suspend: Sequence[Card], note_id: int):
     """Suspend the given cards and mark their note as addon-managed."""
 
     if not cards_to_suspend:
@@ -102,14 +124,117 @@ def suspend_new_cards(col: Collection, cards_to_suspend: Sequence[Card], note_id
         col.update_note(note)
 
 
-def start_work(col: Collection):
+def note_is_ignored_deck(col: Collection, card: Card) -> bool:
+    """Return whether the card belongs to one of the ignored decks."""
+
+    ignored_decks = {
+        str(deck) for deck in cast(list[str], config_settings["ignored_decks"]) if deck
+    }
+    if not ignored_decks:
+        return False
+
+    deck = cast(dict[str, Any], col.decks.get(card.did))
+    deck_name = str(deck.get("name", ""))
+    return deck_name in ignored_decks or str(card.did) in ignored_decks
+
+
+def process_note(col: Collection, note_id: int, coming_from_reviewer_hook: bool = False):
+    """Process the cards belonging to a single note."""
+
+    siblings = get_child_cards(col, note_id)
+
+    if len(siblings) <= 1:
+        # If the note has only one card, then move on
+        return
+
+    if note_is_ignored_deck(col, siblings[0]):
+        return
+
+    logThis(lambda: f"`Siblings within nid:{note_id} → {cards_details(siblings)}")
+
+    all_new_cards = [card for card in siblings if card.type == CARD_TYPE_NEW]
+    new_cards, immature_cards = classify_cards(siblings)
+    note = siblings[0].note()
+
+    if immature_cards:
+        # Since there are immature cards in the note, suspend all new cards (if not already suspended by the addon).
+
+        new_cards_to_suspend = [
+            card
+            for card in new_cards
+            if card.queue
+            != QUEUE_TYPE_SUSPENDED  # card.queue == QUEUE_TYPE_SUSPENDED means the card is already suspended.
+        ]  # We don't want to add the tag (by calling suspend_new_cards()) to a note if all cards are manually suspended.
+
+        if not new_cards_to_suspend:
+            # If all cards to suspend are already suspended, then this list is empty anyway
+            return
+
+        # if coming_from_reviewer_hook:
+        #     first_new_card = new_cards_to_suspend.pop(0)
+        #     col.sched.bury_cards(ids=[first_new_card.id], manual=False)
+
+        suspend_cards(col, new_cards_to_suspend, note_id)
+    else:
+        # No immature cards, keep the first new card available and suspend the rest.
+
+        if not all_new_cards:
+            # If new cards list is empty, then there are no new cards to process anymore, so skip to the next note.
+            return
+
+        if note.has_tag(SUSPENDED_BY_ADDON_TAG):
+            # This means that some new cards of this note were previously suspended by the addon, so we can safely unsuspend the first card and suspend the rest (if not already suspended).
+            first_card = all_new_cards[0]
+            if first_card.queue == QUEUE_TYPE_SUSPENDED:
+                logThis(
+                    lambda: f"\t\tUnsuspending first new card from nid:{note_id} →: {cards_details([first_card])}\n"
+                )
+                col.sched.unsuspend_cards([first_card.id])
+                if coming_from_reviewer_hook:
+                    col.sched.bury_cards(
+                        ids=[first_card.id], manual=False
+                    )  # Bury the card to not review right after after unsuspending
+
+            # No need to re-suspend the others; they are already suspended.
+        else:
+            # If the note is not tagged as addon-managed, this means that this is a new note. So we should bury the first card for tomorrow and suspend the rest (if not already suspended).
+
+            new_cards_to_suspend = [
+                card for card in all_new_cards[1:] if card.queue != QUEUE_TYPE_SUSPENDED
+            ]
+            # first_active_index = next(
+            #     (index for index, card in enumerate(all_new_cards) if card.queue != QUEUE_TYPE_SUSPENDED),
+            #     None,
+            # )
+
+            # if first_active_index is None:
+            #     continue
+
+            # cards_to_suspend = [
+            #     card for card in all_new_cards[first_active_index + 1 :] if card.queue != QUEUE_TYPE_SUSPENDED
+            # ]
+
+            if not new_cards_to_suspend:
+                return
+
+            if coming_from_reviewer_hook:
+                # This means we've just seen the card that has just matured, so we should bury the next new card for tomorrow to not review right after.
+                first_new_card = all_new_cards[0]
+                col.sched.bury_cards(
+                    ids=[first_new_card.id], manual=False
+                )  # Bury the first card for tomorrow to not review right after.
+
+            suspend_cards(col, new_cards_to_suspend, note_id)
+
+
+def process_all_notes(col: Collection):
     """This is the main function. Start the work when the collection is loaded.
 
     Args:
         col (anki.collection.Collection): The collection to work on.
     """
 
-    global due_column, last_checked_state
+    global last_checked_state
 
     should_run, current_state = should_run_work(col)
     if not should_run:
@@ -121,84 +246,10 @@ def start_work(col: Collection):
     if not mw or not mw.col:
         raise Exception("SibPush : Anki is not initialized properly")
 
-    all_browser_columns = mw.col.all_browser_columns()
-
-    # Capture the BrowserColumn for the due date globally to be used in get_child_cards function.
-    due_column = next(col for col in all_browser_columns if col.key == "cardDue")
-
     logThis(f"new_note_ids: {new_note_ids}")
 
     for new_note_id in new_note_ids:
-        siblings = get_child_cards(new_note_id)
-
-        if len(siblings) <= 1:
-            # If the note has only one card, then move on
-            continue
-
-        logThis(lambda: f"`Siblings within nid:{new_note_id} → {cards_details(siblings)}")
-
-        all_new_cards = [card for card in siblings if card.type == CARD_TYPE_NEW]
-        new_cards, immature_cards = classify_cards(siblings)
-        note = siblings[0].note()
-
-        if immature_cards:
-            # Since there are immature cards in the note, suspend all new cards (if not already suspended by the addon).
-
-            cards_to_suspend = [
-                card
-                for card in new_cards
-                if card.queue
-                != QUEUE_TYPE_SUSPENDED  # card.queue == QUEUE_TYPE_SUSPENDED means the card is already suspended.
-            ]  # We don't want to add the tag (by calling suspend_new_cards()) to a note if all cards are manually suspended.
-
-            if not cards_to_suspend:
-                # If all cards to suspend are already suspended, then this list is empty anyway
-                continue
-
-            suspend_new_cards(col, cards_to_suspend, new_note_id)
-        else:
-            # No immature cards, keep the first new card available and suspend the rest.
-
-            if not all_new_cards:
-                # If new cards list is empty, then there are no new cards to unsuspend or process anymore, so skip to the next note.
-                continue
-
-            if note.has_tag(SUSPENDED_BY_ADDON_TAG):
-                # This means that some new cards of this note were previously suspended by the addon, so we can safely unsuspend the first card and suspend the rest (if not already suspended).
-                first_card = all_new_cards[0]
-                if first_card.queue == QUEUE_TYPE_SUSPENDED:
-                    logThis(
-                        lambda: f"\t\tUnsuspending first new card from nid:{new_note_id} →: {cards_details([first_card])}\n"
-                    )
-                    col.sched.unsuspend_cards([first_card.id])
-                    col.sched.bury_cards(
-                        ids=[first_card.id], manual=False
-                    )  # Bury the card to not review right after after unsuspending
-
-                # No need to re-suspend the others; they are already suspended.
-                cards_to_suspend = []
-            else:
-                # If the note is not tagged as addon-managed, this means that this is a new note. So we should keep the first card available and suspend the rest (if not already suspended).
-
-                cards_to_suspend = [
-                    card for card in all_new_cards[1:] if card.queue != QUEUE_TYPE_SUSPENDED
-                ]
-                # first_active_index = next(
-                #     (index for index, card in enumerate(all_new_cards) if card.queue != QUEUE_TYPE_SUSPENDED),
-                #     None,
-                # )
-
-                # if first_active_index is None:
-                #     continue
-
-                # cards_to_suspend = [
-                #     card for card in all_new_cards[first_active_index + 1 :] if card.queue != QUEUE_TYPE_SUSPENDED
-                # ]
-
-            if not cards_to_suspend:
-                continue
-
-            suspend_new_cards(col, cards_to_suspend, new_note_id)
+        process_note(col, new_note_id)
 
     last_checked_state = current_state
 
@@ -215,7 +266,17 @@ def browser_render(browser: Any):
     if not browser or not browser.mw.col:
         raise Exception("SibPush : Anki is not initialized properly")
 
-    start_work(browser.mw.col)
+    process_all_notes(browser.mw.col)
+
+
+@gui_hooks.reviewer_did_answer_card.append  # type: ignore
+def reviewer_did_answer_card(reviewer: Any, card: Card, ease: int):
+    logThis(lambda: f"reviewer_did_answer_card hook triggered for nid:{card.nid} ease:{ease}")
+
+    if not reviewer or not reviewer.mw or not reviewer.mw.col:
+        raise Exception("SibPush : Anki is not initialized properly")
+
+    process_note(reviewer.mw.col, card.nid, coming_from_reviewer_hook=True)
 
 
 gui_hooks.addon_config_editor_will_update_json.append(on_config_save)
