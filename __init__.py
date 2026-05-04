@@ -3,7 +3,7 @@ import os
 from datetime import date
 from aqt import mw
 from aqt import gui_hooks
-from typing import Any, Sequence, cast
+from typing import Any, Sequence
 from anki.cards import Card
 from anki.collection import CARD_TYPE_NEW, QUEUE_TYPE_SUSPENDED, Collection
 from anki.notes import NoteId
@@ -13,22 +13,20 @@ from .helper import (
     format_note_change,
     classify_cards,
 )
-from .config_parser import config_settings, on_config_save
+from .config_parser import (
+    config_settings,
+    custom_deck_rules_by_did,
+    ignored_deck_ids,
+    on_config_save,
+)
+from .config_migration import migrate_legacy_config
 
 addon_path = os.path.dirname(os.path.realpath(__file__))
 SUSPENDED_BY_ADDON_TAG = "SibPush-suspended"
 
 
-def get_ignored_decks_query() -> str:
-    """Build the deck exclusion query from the addon config."""
-
-    return " ".join(
-        [f'-deck:"{deck}"' for deck in cast(list[str], config_settings["ignored_decks"]) if deck]
-    )
-
-
 def get_new_note_ids(col: Collection) -> Sequence[NoteId]:
-    """Get the ids of all new notes in the collection. While ignoring the decks specified in the config.
+    """Get the ids of all new notes in the collection.
 
     Args:
         col (anki.collection.Collection): The collection to search in.
@@ -36,8 +34,34 @@ def get_new_note_ids(col: Collection) -> Sequence[NoteId]:
     Returns:
         list[int] : The list of nids of the found Notes.
     """
-    ignored_decks_query = get_ignored_decks_query()
-    return col.find_notes(f"is:new {ignored_decks_query}")
+    ignored_query = " ".join(f"-did:{deck_id}" for deck_id in ignored_deck_ids if deck_id)
+    query = f"is:new {ignored_query}".strip()
+    return col.find_notes(query)
+
+
+def get_deck_rule(card: Card) -> dict[str, Any] | None:
+    """Return the cached rule for the card's deck, if one exists."""
+
+    return custom_deck_rules_by_did.get(str(card.did))
+
+
+def get_deck_interval(card: Card) -> int:
+    """Return the interval threshold for the card's deck."""
+
+    rule = get_deck_rule(card)
+    if rule is None:
+        return int(config_settings["default_interval"])
+
+    return int(rule["interval"])
+
+
+def migrate_legacy_config_on_startup() -> None:
+    """Temporary startup hook for legacy config migration.
+
+    TODO: delete this function once the migration window ends.
+    """
+
+    migrate_legacy_config()
 
 
 def get_child_cards(col: Collection, note_id: int) -> Sequence[Card]:
@@ -94,8 +118,6 @@ def suspend_cards(col: Collection, cards_to_suspend: Sequence[Card], note_id: in
     if not cards_to_suspend:
         return
 
-    col.sched.suspend_cards([card.id for card in cards_to_suspend])
-
     note = cards_to_suspend[0].note()
 
     if not note.has_tag(SUSPENDED_BY_ADDON_TAG):
@@ -104,19 +126,14 @@ def suspend_cards(col: Collection, cards_to_suspend: Sequence[Card], note_id: in
         )  # Add tag to mark the note as managed by the addon, if already added, it won't be duplicated
         note.flush()  # More reliable that col.update_note(note)
 
+    col.sched.suspend_cards([card.id for card in cards_to_suspend])
 
-def note_is_ignored_deck(col: Collection, card: Card) -> bool:
-    """Return whether the card belongs to one of the ignored decks."""
 
-    ignored_decks = {
-        str(deck) for deck in cast(list[str], config_settings["ignored_decks"]) if deck
-    }
-    if not ignored_decks:
-        return False
+def note_is_ignored_deck(card: Card) -> bool:
+    """Return whether the card belongs to an ignored deck id."""
 
-    deck = cast(dict[str, Any], col.decks.get(card.did))
-    deck_name = str(deck.get("name", ""))
-    return deck_name in ignored_decks or str(card.did) in ignored_decks
+    rule = get_deck_rule(card)
+    return bool(rule and rule.get("ignored"))
 
 
 def process_note(col: Collection, note_id: int, coming_from_reviewer_hook: bool = False):
@@ -133,13 +150,15 @@ def process_note(col: Collection, note_id: int, coming_from_reviewer_hook: bool 
         # If the note has only one card, then move on
         return
 
-    if note_is_ignored_deck(col, siblings[0]):
+    if coming_from_reviewer_hook and note_is_ignored_deck(siblings[0]):
+        # If we're not coming from the reviewer hook, ignored ids are already filtered out by the search query.
         return
 
     before_snapshots = capture_snapshots(siblings) if debug_enabled else None
 
     all_new_cards = [card for card in siblings if card.type == CARD_TYPE_NEW]
-    new_cards, immature_cards = classify_cards(siblings)
+    interval_threshold = get_deck_interval(siblings[0])
+    new_cards, immature_cards = classify_cards(siblings, interval_threshold)
     note = siblings[0].note()
 
     # For debugging purposes
@@ -195,17 +214,6 @@ def process_note(col: Collection, note_id: int, coming_from_reviewer_hook: bool 
             new_cards_to_suspend = [
                 card for card in all_new_cards[1:] if card.queue != QUEUE_TYPE_SUSPENDED
             ]
-            # first_active_index = next(
-            #     (index for index, card in enumerate(all_new_cards) if card.queue != QUEUE_TYPE_SUSPENDED),
-            #     None,
-            # )
-
-            # if first_active_index is None:
-            #     continue
-
-            # cards_to_suspend = [
-            #     card for card in all_new_cards[first_active_index + 1 :] if card.queue != QUEUE_TYPE_SUSPENDED
-            # ]
 
             if not new_cards_to_suspend:
                 return
@@ -267,6 +275,7 @@ def process_all_notes(col: Collection):
 
 @gui_hooks.collection_did_load.append  # type: ignore
 def collection_did_load(col: Collection):
+    migrate_legacy_config_on_startup()
     initialize_log_file()
 
 

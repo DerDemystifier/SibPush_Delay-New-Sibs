@@ -7,6 +7,7 @@ from __future__ import annotations
 import importlib
 import importlib.util
 import sys
+from copy import deepcopy
 from collections.abc import Generator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
@@ -28,6 +29,8 @@ class AddonModule(Protocol):
     mw: Any
     last_checked_state: tuple[str, Sequence["NoteId"]] | None
     config_settings: dict[str, object]
+    custom_deck_rules_by_did: dict[str, dict[str, object]]
+    ignored_deck_ids: list[str]
 
     def process_all_notes(self, col: "Collection") -> None: ...
 
@@ -44,9 +47,9 @@ def load_addon_module() -> AddonModule:
     during test execution.
     """
     module_name = "sibpush_test_addon"
-    cached = sys.modules.get(module_name)
-    if cached is not None:
-        return cast(AddonModule, cached)
+
+    for cached_name in [name for name in sys.modules if name == module_name or name.startswith(f"{module_name}.")]:
+        sys.modules.pop(cached_name, None)
 
     module_path = Path(__file__).resolve().parent.parent / "__init__.py"
     spec = importlib.util.spec_from_file_location(
@@ -71,13 +74,15 @@ def patched_addon_state(col: "Collection") -> Generator[AddonModule, None, None]
     This context manager:
     1. Swaps `mw.col` for the provided test collection.
     2. Resets internal state caches (last_checked_state).
-    3. Configures test-specific settings (interval=21).
+    3. Configures test-specific settings (default_interval=21, no custom deck rules).
     4. Restores original state on exit.
     """
     addon = load_addon_module()
     original_mw = addon.mw
     original_last_checked_state = addon.last_checked_state
-    original_config = dict(addon.config_settings)
+    original_config = deepcopy(addon.config_settings)
+    original_ignored_deck_ids = list(addon.ignored_deck_ids)
+    original_custom_deck_rules_by_did = deepcopy(addon.custom_deck_rules_by_did)
 
     # Mock the main window to provide access to our test collection
     addon.mw = SimpleNamespace(col=col)
@@ -85,9 +90,11 @@ def patched_addon_state(col: "Collection") -> Generator[AddonModule, None, None]
 
     # Configure test environment
     addon.config_settings.clear()
-    addon.config_settings.update(original_config)
-    addon.config_settings["interval"] = TEST_INTERVAL
-    addon.config_settings["ignored_decks"] = []
+    addon.config_settings.update(deepcopy(original_config))
+    addon.config_settings["default_interval"] = TEST_INTERVAL
+    addon.config_settings["custom_deck_rules"] = []
+    addon.ignored_deck_ids[:] = []
+    addon.custom_deck_rules_by_did.clear()
 
     try:
         yield addon
@@ -96,4 +103,7 @@ def patched_addon_state(col: "Collection") -> Generator[AddonModule, None, None]
         addon.mw = original_mw
         addon.last_checked_state = original_last_checked_state
         addon.config_settings.clear()
-        addon.config_settings.update(original_config)
+        addon.config_settings.update(deepcopy(original_config))
+        addon.ignored_deck_ids[:] = original_ignored_deck_ids
+        addon.custom_deck_rules_by_did.clear()
+        addon.custom_deck_rules_by_did.update(deepcopy(original_custom_deck_rules_by_did))

@@ -14,8 +14,6 @@ from anki.cards import (
     Card,
 )
 
-from .config_parser import config_settings
-
 if TYPE_CHECKING:
     from anki.collection import Collection
 
@@ -32,14 +30,7 @@ class CardSnapshot:
 
 
 def _deck_name_for_card(col: Collection, card: Card) -> str:
-    deck = cast(Optional[dict[str, Any]], col.decks.get(card.did))
-    if not deck:
-        return "Unknown Deck"
-    return str(deck.get("name", "Unknown Deck"))
-
-
-def _deck_name_for_snapshot(col: Collection, snapshot: CardSnapshot) -> str:
-    deck = cast(Optional[dict[str, Any]], col.decks.get(snapshot.did))
+    deck = col.decks.get(card.did)
     if not deck:
         return "Unknown Deck"
     return str(deck.get("name", "Unknown Deck"))
@@ -89,7 +80,11 @@ def _interval_label(queue: int, card_type: int, ivl: int) -> str:
 
 
 def _sort_key(snapshot: CardSnapshot) -> tuple[int, int, int, int]:
-    if snapshot.queue in {QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_MANUALLY_BURIED, QUEUE_TYPE_SIBLING_BURIED}:
+    if snapshot.queue in {
+        QUEUE_TYPE_SUSPENDED,
+        QUEUE_TYPE_MANUALLY_BURIED,
+        QUEUE_TYPE_SIBLING_BURIED,
+    }:
         group = 2
         return group, snapshot.due, snapshot.id, snapshot.ivl
 
@@ -139,7 +134,9 @@ def format_note_snapshot(
     indent = "      " if section else "    "
     for snapshot in sorted(snapshots, key=_sort_key):
         previous_status = previous_statuses.get(snapshot.id) if previous_statuses else None
-        lines.append(_format_snapshot_line(snapshot, previous_status=previous_status, indent=indent))
+        lines.append(
+            _format_snapshot_line(snapshot, previous_status=previous_status, indent=indent)
+        )
 
     return "\n".join(lines)
 
@@ -154,9 +151,15 @@ def format_note_change(
 ) -> str:
     """Render a before/action/after block for a note processing step."""
 
-    before_statuses = {snapshot.id: _status_label(snapshot.queue, snapshot.type) for snapshot in before_snapshots}
+    before_statuses = {
+        snapshot.id: _status_label(snapshot.queue, snapshot.type) for snapshot in before_snapshots
+    }
     lines = _format_note_header(note, col, note_id)
-    lines.append(format_note_snapshot(note, col, note_id, before_snapshots, section="Before", include_header=False))
+    lines.append(
+        format_note_snapshot(
+            note, col, note_id, before_snapshots, section="Before", include_header=False
+        )
+    )
     lines.append(f"    Action: {action}")
     lines.append(
         format_note_snapshot(
@@ -180,7 +183,9 @@ def card_details(card: Card) -> str:
     return f"    --- Card {card.id} | Due: {card.due} | Interval: {interval} [{status}]"
 
 
-def cards_details(cards: Sequence[Card], col: Optional[Collection] = None, note_id: int | None = None) -> str:
+def cards_details(
+    cards: Sequence[Card], col: Optional[Collection] = None, note_id: int | None = None
+) -> str:
     """Format a group of sibling cards for readable debug logging."""
 
     if not cards:
@@ -195,7 +200,9 @@ def cards_details(cards: Sequence[Card], col: Optional[Collection] = None, note_
     return format_note_snapshot(note, col, display_note_id, snapshots)
 
 
-def classify_cards(siblings: Sequence[Card]) -> tuple[list[Card], list[Card]]:
+def classify_cards(
+    siblings: Sequence[Card], interval_threshold: int
+) -> tuple[list[Card], list[Card]]:
     """Classify cards into new and immature cards.
 
     Args:
@@ -213,7 +220,7 @@ def classify_cards(siblings: Sequence[Card]) -> tuple[list[Card], list[Card]]:
 
         if sibling.type == CARD_TYPE_NEW:
             new_cards.append(sibling)
-        elif sibling.ivl < config_settings["interval"]:
+        elif sibling.ivl < interval_threshold:
             immature_cards.append(sibling)
 
     return new_cards, immature_cards

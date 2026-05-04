@@ -1,5 +1,40 @@
 # Configuration Guide
 
+## `default_interval`
+
+-   **Type**: Integer
+-   **Description**: Defines the interval (in days) required for a card to be considered "matured". Decks that are not listed in `custom_deck_rules` use this value.
+-   **Example**: `"default_interval": 21`
+
+## `custom_deck_rules`
+
+-   **Type**: List of objects
+-   **Description**: Specifies the decks that should use a custom rule. Each entry uses the deck ID (`did`) as the stable identifier; `name` is only for readability in the config file. `interval` overrides `default_interval` for that deck.
+-   **Example**:
+
+    ```json
+    "custom_deck_rules": [
+        {
+            "did": "1777739665453",
+            "name": "Siblings",
+            "ignored": false,
+            "interval": 18
+        },
+        {
+            "did": "1777739665454",
+            "name": "Big Deck",
+            "ignored": true,
+            "interval": 30
+        }
+    ]
+    ```
+
+    -   `did` is the deck ID Anki assigns to the deck.
+    -   `name` is a human-friendly label shown only for convenience.
+    -   `ignored: true` skips that deck entirely.
+    -   `ignored: false` keeps that deck active under `default_interval`.
+    -   `interval` is the maturity threshold for that specific deck.
+
 ## `debug`
 
 -   **Type**: Boolean (true or false)
@@ -8,22 +43,8 @@
     -   `false`: Logging is disabled.
 -   **Example**: `"debug": false`
 
-## `ignored_decks`
-
--   **Type**: List of strings
--   **Description**: Specifies the decks that should be ignored. You can provide either the complete deck name or just the subdeck name.
--   **Example**: `["Deck::SubDeck", "Deck2"]`
-
-    **Note**: If you provide only the subdeck name and multiple decks share that name under different parent decks, all those decks will be ignored. To avoid potential confusion, it's recommended to use the Anki browser to retrieve the full name of the deck you wish to ignore (e.g `deck:Deck::SubDeck` → `Deck::SubDeck` and `deck:Deck2` → `Deck2`).
-
-## `interval`
-
--   **Type**: Integer
--   **Description**: Defines the interval (in days) required for a card to be considered "matured". Once a card has matured, new sibling cards become eligible for study and addon-managed suspended siblings can be restored.
--   **Example**: `"interval": 21`
-
 ## Suspension lifecycle
 
--   SibPush marks addon-managed suspended notes with the `SibPush_suspended` tag.
--   On the next deck browser render, SibPush checks tagged notes again and unsuspends the addon-managed cards whose remaining siblings are mature.
--   Manually suspended cards are left alone by SibPush.
+- SibPush marks addon-managed suspended notes with the `SibPush_suspended` tag.
+- On the next deck browser render, SibPush checks tagged notes again and unsuspends the addon-managed cards whose remaining siblings are mature.
+- Manually suspended cards are left alone by SibPush.
