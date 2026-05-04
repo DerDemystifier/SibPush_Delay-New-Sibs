@@ -14,7 +14,7 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Protocol, cast
 
 if TYPE_CHECKING:
-    from anki.collection import BrowserColumns, Collection
+    from anki.collection import Collection
     from anki.notes import NoteId
 
 
@@ -27,7 +27,6 @@ class AddonModule(Protocol):
 
     mw: Any
     last_checked_state: tuple[str, Sequence["NoteId"]] | None
-    due_column: "BrowserColumns.Column | None"
     config_settings: dict[str, object]
 
     def process_all_notes(self, col: "Collection") -> None: ...
@@ -78,13 +77,11 @@ def patched_addon_state(col: "Collection") -> Generator[AddonModule, None, None]
     addon = load_addon_module()
     original_mw = addon.mw
     original_last_checked_state = addon.last_checked_state
-    original_due_column = cast("BrowserColumns.Column | None", getattr(addon, "due_column", None))
     original_config = dict(addon.config_settings)
 
     # Mock the main window to provide access to our test collection
     addon.mw = SimpleNamespace(col=col)
     addon.last_checked_state = None
-    addon.due_column = None
 
     # Configure test environment
     addon.config_settings.clear()
@@ -98,6 +95,5 @@ def patched_addon_state(col: "Collection") -> Generator[AddonModule, None, None]
         # Restore state to prevent leakage between tests
         addon.mw = original_mw
         addon.last_checked_state = original_last_checked_state
-        addon.due_column = original_due_column
         addon.config_settings.clear()
         addon.config_settings.update(original_config)
