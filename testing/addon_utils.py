@@ -30,7 +30,9 @@ class AddonModule(Protocol):
     due_column: "BrowserColumns.Column | None"
     config_settings: dict[str, object]
 
-    def start_work(self, col: "Collection") -> None: ...
+    def process_all_notes(self, col: "Collection") -> None: ...
+
+    def process_note(self, col: "Collection", note_id: int, coming_from_reviewer_hook: bool = False) -> None: ...
 
     SUSPENDED_BY_ADDON_TAG: str
 

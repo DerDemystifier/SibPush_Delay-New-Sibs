@@ -26,15 +26,15 @@ def make_test_deck_id(col: "Collection") -> "DeckId":
     return deck_id
 
 
-def build_test_notetype(col: "Collection") -> "NotetypeDict":
+def build_test_notetype(col: "Collection", card_count: int = 3) -> "NotetypeDict":
     """
-    Create a simple note type with three sibling cards for testing.
+    Create a simple note type with a configurable number of sibling cards for testing.
     """
     model = col.models.new(TEST_NOTE_TYPE_NAME)
     col.models.add_field(model, col.models.new_field("Front"))
 
-    # Create 3 templates to ensure we have siblings to manage
-    for idx in range(3):
+    # Create templates to ensure we have siblings to manage
+    for idx in range(card_count):
         template = col.models.new_template(f"Card {idx + 1}")
         template["qfmt"] = f"{{{{Front}}}}<div>Card {idx + 1}</div>"
         template["afmt"] = f"{{{{Front}}}}<hr id='answer'>Card {idx + 1}"
@@ -45,7 +45,11 @@ def build_test_notetype(col: "Collection") -> "NotetypeDict":
 
 
 def add_note_with_siblings(
-    col: "Collection", model: "NotetypeDict", deck_id: "DeckId", front_text: str
+    col: "Collection",
+    model: "NotetypeDict",
+    deck_id: "DeckId",
+    front_text: str,
+    expected_card_count: int = 3,
 ) -> tuple["Note", Sequence["Card"]]:
     """
     Add a new note to the collection and return it along with its cards.
@@ -55,5 +59,5 @@ def add_note_with_siblings(
     col.add_note(note, deck_id)
 
     cards = note.cards()
-    assert len(cards) == 3, "expected the test note type to generate three cards"
+    assert len(cards) == expected_card_count, f"expected the test note type to generate {expected_card_count} cards"
     return note, cards
