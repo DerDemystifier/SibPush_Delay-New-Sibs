@@ -5,7 +5,7 @@ from aqt import mw
 from aqt import gui_hooks
 from typing import Any, Sequence, cast
 from anki.cards import Card
-from anki.collection import CARD_TYPE_NEW, QUEUE_TYPE_SUSPENDED, Collection, BrowserColumns
+from anki.collection import CARD_TYPE_NEW, QUEUE_TYPE_SUSPENDED, Collection
 from anki.notes import NoteId
 from .log_helper import logThis, initialize_log_file
 from .helper import (
@@ -52,8 +52,7 @@ def get_child_cards(col: Collection, note_id: int) -> Sequence[Card]:
     if not mw or not mw.col or not mw.col.db:
         raise Exception("SibPush : Anki is not initialized properly")
 
-    # Set order by the due date in the browser, so that we can get the cards in their due order.
-    card_ids = col.find_cards(query=f"nid:{note_id}", order=get_due_column(col))
+    card_ids = col.find_cards(query=f"nid:{note_id}")
 
     # You can also conduct searches using the db connection directly
     # card_ids = mw.col.db.list("select id from cards where nid=?", note_id)
@@ -61,25 +60,7 @@ def get_child_cards(col: Collection, note_id: int) -> Sequence[Card]:
     return [mw.col.get_card(card_id) for card_id in card_ids]
 
 
-due_column: BrowserColumns.Column | None = None
 last_checked_state: tuple[str, Sequence[NoteId]] | None = None
-
-
-def get_due_column(col: Collection) -> BrowserColumns.Column:
-    """Return the browser column used to sort cards by due date."""
-
-    global due_column
-
-    if due_column is None:
-        all_browser_columns = col.all_browser_columns()
-        due_column = next(
-            (column for column in all_browser_columns if column.key == "cardDue"), None
-        )
-        if due_column is None:
-            raise Exception("SibPush : Could not find the due browser column")
-
-    assert due_column is not None
-    return due_column
 
 
 def should_run_work(col: Collection) -> tuple[bool, tuple[str, Sequence[NoteId]]]:
@@ -119,9 +100,10 @@ def suspend_cards(col: Collection, cards_to_suspend: Sequence[Card], note_id: in
 
     col.sched.suspend_cards([card.id for card in cards_to_suspend])
 
-    if not note.has_tag(SUSPENDED_BY_ADDON_TAG):
-        note.add_tag(SUSPENDED_BY_ADDON_TAG)
-        col.update_note(note)
+    note.add_tag(
+        SUSPENDED_BY_ADDON_TAG
+    )  # Add tag to mark the note as managed by the addon, if already added, it won't be duplicated
+    col.update_note(note)
 
 
 def note_is_ignored_deck(col: Collection, card: Card) -> bool:
@@ -142,6 +124,9 @@ def process_note(col: Collection, note_id: int, coming_from_reviewer_hook: bool 
     """Process the cards belonging to a single note."""
 
     siblings = get_child_cards(col, note_id)
+    siblings = sorted(
+        siblings, key=lambda card: card.due
+    )  # Sort siblings by due date to respect the original order of cards.
 
     if len(siblings) <= 1:
         # If the note has only one card, then move on
