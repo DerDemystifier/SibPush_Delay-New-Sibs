@@ -8,10 +8,33 @@ from typing import Any
 
 from anki.cards import Card
 from anki.collection import Collection
-from anki.notes import NoteId
+from anki.notes import Note, NoteId
 
 from ..config.parser import config_settings, custom_deck_rules_by_did, ignored_deck_ids
 from ..state import get_last_checked_state, get_mw
+
+
+def get_tag_rule(note: Note) -> dict[str, Any] | None:
+    """Look up the first matching tag rule for a note.
+
+    Args:
+        note (anki.notes.Note): The note whose tags should be inspected.
+
+    Returns:
+        dict[str, Any] | None: The matching rule, or None when no tag rule applies.
+    """
+
+    raw_tag_rules = config_settings.get("tag_rules", {})
+    if not isinstance(raw_tag_rules, dict):
+        return None
+
+    note_tags = {str(tag).strip() for tag in getattr(note, "tags", []) if str(tag).strip()}
+    for raw_tag, rule in raw_tag_rules.items():
+        tag = str(raw_tag).strip()
+        if tag and tag in note_tags and isinstance(rule, dict):
+            return rule
+
+    return None
 
 
 def get_new_note_ids(col: Collection) -> Sequence[NoteId]:
@@ -57,6 +80,26 @@ def get_deck_interval(card: Card) -> int:
         return int(config_settings["default_interval"])
 
     return int(rule["interval"])
+
+
+def get_note_interval(note: Note, card: Card) -> int:
+    """Return the effective interval threshold for a note.
+
+    Tag rules take precedence over deck rules, and the first matching tag rule in the config wins.
+
+    Args:
+        note (anki.notes.Note): The note whose tags should be inspected.
+        card (anki.cards.Card): A card from the note used to resolve the deck rule fallback.
+
+    Returns:
+        int: The configured interval threshold for the note.
+    """
+
+    tag_rule = get_tag_rule(note)
+    if tag_rule is not None:
+        return int(tag_rule["interval"])
+
+    return get_deck_interval(card)
 
 
 def get_child_cards(col: Collection, note_id: int) -> Sequence[Card]:

@@ -10,13 +10,11 @@ from ..cards.formatting import capture_snapshots, format_note_change
 from ..config.parser import config_settings
 from ..logging_support import logThis
 from ..state import SUSPENDED_BY_ADDON_TAG, sync_last_checked_state
-from .query import get_child_cards, get_deck_interval, should_run_work
+from .query import get_child_cards, get_note_interval, should_run_work
 from .suspension import note_is_ignored_deck, suspend_cards
 
 
-def process_note(
-    col: Collection, note_id: int, coming_from_reviewer_hook: bool = False
-) -> None:
+def process_note(col: Collection, note_id: int, coming_from_reviewer_hook: bool = False) -> None:
     """Process the sibling cards belonging to a single note.
 
     Args:
@@ -39,15 +37,16 @@ def process_note(
         return
 
     if coming_from_reviewer_hook and note_is_ignored_deck(siblings[0]):
-        # If we're not coming from the reviewer hook, ignored ids are already filtered out by the search query.
+        # If we're coming from the reviewer hook and the note belongs to an ignored deck, skip.
+        # If we're not coming from the reviewer hook, ignored ids are already filtered out by the search query, so we cannot arrive here with an ignored note.
         return
 
     before_snapshots = capture_snapshots(siblings) if debug_enabled else None
 
     all_new_cards = [card for card in siblings if card.type == CARD_TYPE_NEW]
-    interval_threshold = get_deck_interval(siblings[0])
-    new_cards, immature_cards = classify_cards(siblings, interval_threshold)
     note = siblings[0].note()
+    interval_threshold = get_note_interval(note, siblings[0])
+    new_cards, immature_cards = classify_cards(siblings, interval_threshold)
 
     # For debugging purposes.
     action_taken: str | None = None
@@ -55,9 +54,7 @@ def process_note(
 
     if immature_cards:
         # Since there are immature cards in the note, suspend all new cards (if not already suspended by the addon).
-        new_cards_to_suspend = [
-            card for card in new_cards if card.queue != QUEUE_TYPE_SUSPENDED
-        ]
+        new_cards_to_suspend = [card for card in new_cards if card.queue != QUEUE_TYPE_SUSPENDED]
 
         if not new_cards_to_suspend:
             # If all cards to suspend are already suspended, then this list is empty anyway.

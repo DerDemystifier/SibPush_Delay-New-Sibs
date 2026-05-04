@@ -30,6 +30,10 @@ from testing.test_legacy_config_migration import (
 from testing.test_custom_deck_interval import (
     test_custom_deck_interval_overrides_default_threshold,
 )
+from testing.test_tag_rule_interval_precedence import (
+    test_tag_rule_is_ignored_for_ignored_deck,
+    test_tag_rule_overrides_custom_deck_interval,
+)
 
 
 def main() -> None:
@@ -44,6 +48,8 @@ def main() -> None:
         "test_ignored_custom_deck_rule_uses_deck_id": test_ignored_custom_deck_rule_uses_deck_id,
         "test_legacy_config_migrates_to_new_schema": test_legacy_config_migrates_to_new_schema,
         "test_custom_deck_interval_overrides_default_threshold": test_custom_deck_interval_overrides_default_threshold,
+        "test_tag_rule_overrides_custom_deck_interval": test_tag_rule_overrides_custom_deck_interval,
+        "test_tag_rule_is_ignored_for_ignored_deck": test_tag_rule_is_ignored_for_ignored_deck,
     }
     for test_name, test_func in tests.items():
         print("\n" * 10)

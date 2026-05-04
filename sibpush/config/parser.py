@@ -66,7 +66,31 @@ def _normalize_custom_deck_rule(rule: Any, default_interval: int) -> dict[str, A
         "did": did,
         "name": name,
         "ignored": bool(rule_dict.get("ignored", False)),
-        "interval": _parse_int(rule_dict.get("interval", default_interval), default_interval),
+        "interval": _parse_int(
+            rule_dict.get("interval", default_interval), default_interval
+        ),
+    }
+
+
+def _normalize_tag_rule(rule: Any, default_interval: int) -> dict[str, Any] | None:
+    """Normalize one tag rule into the canonical schema.
+
+    Args:
+        rule (Any): The raw rule object from config.json.
+        default_interval (int): The interval to use when the rule omits one.
+
+    Returns:
+        dict[str, Any] | None: A normalized rule dictionary, or None when the input is invalid.
+    """
+
+    if not isinstance(rule, dict):
+        return None
+
+    rule_dict = cast(dict[str, object], rule)
+    return {
+        "interval": _parse_int(
+            rule_dict.get("interval", default_interval), default_interval
+        )
     }
 
 
@@ -130,9 +154,43 @@ def _index_custom_deck_rules(custom_deck_rules: list[dict[str, Any]]) -> dict[st
     }
 
 
+def _parse_tag_rules(config: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
+    """Extract the normalized tag rules mapping from a config object.
+
+    Args:
+        config (dict[str, Any] | None): The raw add-on configuration.
+
+    Returns:
+        dict[str, dict[str, Any]]: The normalized tag rules keyed by tag name.
+    """
+
+    if config is None:
+        return {}
+
+    default_interval = _parse_int(config.get("default_interval", 21), 21)
+    raw_rules = config.get("tag_rules")
+    if not isinstance(raw_rules, dict):
+        return {}
+
+    typed_rules = cast(dict[str, object], raw_rules)
+    normalized_rules: dict[str, dict[str, Any]] = {}
+    for raw_tag, raw_rule in typed_rules.items():
+        tag = str(raw_tag).strip()
+        if not tag:
+            continue
+
+        normalized_rule = _normalize_tag_rule(raw_rule, default_interval)
+        if normalized_rule is None:
+            continue
+
+        normalized_rules[tag] = normalized_rule
+
+    return normalized_rules
+
+
 def parse_config(
     config: dict[str, Any] | None,
-) -> dict[str, bool | int | list[dict[str, Any]]]:
+) -> dict[str, Any]:
     """Parse raw configuration data into the cached runtime settings.
 
     Args:
@@ -145,6 +203,7 @@ def parse_config(
     debug = bool(config["debug"]) if config is not None else False
     default_interval = _parse_int(config.get("default_interval", 21), 21) if config is not None else 21
     custom_deck_rules = _parse_custom_deck_rules(config)
+    tag_rules = _parse_tag_rules(config)
 
     custom_deck_rules_by_did.clear()
     custom_deck_rules_by_did.update(_index_custom_deck_rules(custom_deck_rules))
@@ -154,6 +213,7 @@ def parse_config(
         "debug": debug,
         "default_interval": default_interval,
         "custom_deck_rules": custom_deck_rules,
+        "tag_rules": tag_rules,
     }
 
 
@@ -196,6 +256,7 @@ def on_config_save(config_text: str, addon: str) -> str:
                 f"debug={config_settings['debug']}, "
                 f"default_interval={config_settings['default_interval']}, "
                 f'custom_deck_rules={config_settings["custom_deck_rules"]}, '
+                f'tag_rules={config_settings["tag_rules"]}, '
                 f"ignored_deck_ids={ignored_deck_ids}"
             )
         )

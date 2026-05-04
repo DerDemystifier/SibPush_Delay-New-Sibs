@@ -122,6 +122,7 @@ def patched_addon_state(col: "Collection") -> Generator[AddonModule, None, None]
     parser_module.config_settings.update(deepcopy(original_config))
     parser_module.config_settings["default_interval"] = TEST_INTERVAL
     parser_module.config_settings["custom_deck_rules"] = []
+    parser_module.config_settings["tag_rules"] = {}
     parser_module.ignored_deck_ids[:] = []
     parser_module.custom_deck_rules_by_did.clear()
 

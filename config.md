@@ -35,6 +35,27 @@
     -   `ignored: false` keeps that deck active under `default_interval`.
     -   `interval` is the maturity threshold for that specific deck.
 
+## `tag_rules`
+
+-   **Type**: Dictionary of tag names to rule objects
+-   **Description**: Specifies note tags that should override the deck interval. Each key is a tag name, and each rule currently uses `interval` to define the maturity threshold for notes with that tag. Tag rules take precedence over deck rules, but they do not apply inside ignored decks.
+-   **Example**:
+
+    ```json
+    "tag_rules": {
+        "easy_topic": {
+            "interval": 0
+        },
+        "hard_topic": {
+            "interval": 30
+        }
+    }
+    ```
+
+    -   The first matching tag rule in the config wins when a note has multiple matching tags.
+    -   Use `interval` to override the maturity threshold for notes with that tag.
+    -   If a deck is ignored, SibPush skips the note entirely even if a tag rule matches.
+
 ## `debug`
 
 -   **Type**: Boolean (true or false)
