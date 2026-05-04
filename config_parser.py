@@ -56,17 +56,24 @@ def on_config_save(config_text: str, addon: str) -> str:
         # If the addon name is not mine, return the text to be saved to config.json
         return config_text
 
-    log_helper.logThis("addon_config_editor_will_save_json hook triggered!")
-
     # Parse text argument as json
     config: dict[str, object] = json.loads(config_text)
     debug_before = config_settings["debug"]
     config_settings |= parse_config(config)
 
-    if config_settings["debug"] and config_settings["debug"] != debug_before:
-        # If debug is enabled and it was not enabled before, initialize the log file
-        log_helper.initialize_log_file()
-        log_helper.logThis(f"Config parsed successfully! :: {config}")
+    if config_settings["debug"]:
+        if config_settings["debug"] != debug_before:
+            # If debug is enabled and it was not enabled before, initialize the log file
+            log_helper.initialize_log_file()
+
+        log_helper.logThis(
+            lambda: (
+                "Config updated: "
+                f"debug={config_settings['debug']}, "
+                f"interval={config_settings['interval']}, "
+                f'ignored_decks={config_settings["ignored_decks"]}'
+            )
+        )
 
     # Return the text to be saved to config.json
     return config_text
