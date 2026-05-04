@@ -22,23 +22,32 @@ The configuration of SibPush is straightforward and can be tailored to meet your
 
 -   `custom_deck_rules`: A list of deck-specific rules. Each rule uses the deck ID (`did`) as the stable identifier, while `name` is only there to make the config easier to read. Set `ignored` to `true` to exclude a deck from the SibPush mechanism. Use `interval` to override the maturity threshold for that specific deck.
 
+-   `tag_rules`: A dictionary of tag-specific rules. Each key is a note tag name, and each rule uses `interval` to override the maturity threshold for notes with that tag. Tag rules take precedence over deck rules, but ignored decks still win.
+
         Example:
 
         ```json
-        "custom_deck_rules": [
-            {
-                "did": "1777739665453",
-                "name": "Siblings",
-                "ignored": false,
-                "interval": 18
-            },
-            {
-                "did": "1777739665454",
-                "name": "Big Deck",
-                "ignored": true,
-                "interval": 30
+        {
+            "custom_deck_rules": [
+                {
+                    "did": "1777739665453",
+                    "name": "Siblings",
+                    "ignored": false,
+                    "interval": 18
+                },
+                {
+                    "did": "1777739665454",
+                    "name": "Big Deck",
+                    "ignored": true,
+                    "interval": 30
+                }
+            ],
+            "tag_rules": {
+                "easy_topic": {
+                    "interval": 0
+                }
             }
-        ]
+        }
         ```
 
 -   `debug`: Set to `true` if you are debugging. When `debug` is true, the addon will log more information to `log.txt` file, which can be helpful for troubleshooting.

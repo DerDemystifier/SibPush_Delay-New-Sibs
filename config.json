@@ -1,5 +1,6 @@
 {
     "default_interval": 21,
     "custom_deck_rules": [],
+    "tag_rules": {},
     "debug": false
 }
