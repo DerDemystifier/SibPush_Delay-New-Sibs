@@ -1,18 +1,21 @@
-"""Temporary legacy config migration helpers.
-
-Delete this module after the migration window ends.
-"""
+"""Legacy configuration migration helpers for the SibPush add-on."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from aqt import mw
-
-from . import config_parser
+from . import parser
+from ..state import get_mw
 
 
 def _get_deck_lookup() -> dict[str, str]:
+    """Build a mapping of current deck names to deck ids.
+
+    Returns:
+        dict[str, str]: A lookup table keyed by deck name.
+    """
+
+    mw = get_mw()
     if mw is None:
         return {}
 
@@ -26,15 +29,23 @@ def _get_deck_lookup() -> dict[str, str]:
 def _build_migrated_config(
     config: dict[str, Any], deck_lookup: dict[str, str] | None = None
 ) -> dict[str, Any] | None:
+    """Convert a legacy ignored_decks config into the new schema.
+
+    Args:
+        config (dict[str, Any]): The old configuration dictionary.
+        deck_lookup (dict[str, str] | None): Optional mapping of deck names to deck ids.
+
+    Returns:
+        dict[str, Any] | None: The migrated configuration, or None when migration is not possible.
+    """
+
     legacy_ignored_decks = config.get("ignored_decks")
     if not isinstance(legacy_ignored_decks, list):
         return None
 
     lookup = deck_lookup or {}
     migrated_rules: list[dict[str, Any]] = []
-    default_interval = config_parser._parse_int(
-        config.get("default_interval", config.get("interval", 21)), 21
-    )
+    default_interval = parser._parse_int(config.get("default_interval", config.get("interval", 21)), 21)
 
     for deck_label in legacy_ignored_decks:
         raw_label = str(deck_label).strip()
@@ -61,15 +72,17 @@ def _build_migrated_config(
 
 
 def migrate_legacy_config() -> bool:
-    """Rewrite an old-style config into the new format, if needed.
+    """Rewrite an old-style config into the new format when needed.
 
-    TODO: delete this startup hook after the migration window closes.
+    Returns:
+        bool: True when a migration was written, otherwise False.
     """
 
-    if config_parser.addon_manager is None:
+    addon_manager = parser.addon_manager
+    if addon_manager is None:
         return False
 
-    current_config = config_parser.addon_manager.getConfig(config_parser.__name__)
+    current_config = addon_manager.getConfig(parser._addon_module_name())
     if not isinstance(current_config, dict) or "ignored_decks" not in current_config:
         return False
 
@@ -77,17 +90,15 @@ def migrate_legacy_config() -> bool:
     if migrated_config is None:
         return False
 
-    write_config = getattr(config_parser.addon_manager, "writeConfig", None) or getattr(
-        config_parser.addon_manager, "setConfig", None
-    )
+    write_config = getattr(addon_manager, "writeConfig", None) or getattr(addon_manager, "setConfig", None)
     if write_config is None:
         raise AttributeError("Anki add-on manager does not provide a config write method")
 
     try:
-        write_config(config_parser.__name__, migrated_config)
+        write_config(parser._addon_module_name(), migrated_config)
     except TypeError:
         write_config(migrated_config)
 
-    config_parser.config_settings.clear()
-    config_parser.config_settings.update(config_parser.parse_config(migrated_config))
+    parser.config_settings.clear()
+    parser.config_settings.update(parser.parse_config(migrated_config))
     return True

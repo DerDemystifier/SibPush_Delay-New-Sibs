@@ -1,10 +1,25 @@
+"""Logging helpers for the SibPush add-on."""
+
+from __future__ import annotations
+
 from datetime import datetime
-import os
-from typing import Union
 import logging
+import os
+from pathlib import Path
+from typing import Union
 
-addon_path = os.path.dirname(os.path.realpath(__file__))
 
+def _addon_root_path() -> Path:
+    """Return the add-on root directory.
+
+    Returns:
+        pathlib.Path: The directory containing the add-on entrypoint file.
+    """
+
+    return Path(__file__).resolve().parents[1]
+
+
+addon_path = str(_addon_root_path())
 LOG_FILE_path = os.path.join(addon_path, "log.txt")
 
 # Create a named logger for the add-on
@@ -21,6 +36,12 @@ if not logger.handlers:
 
 
 def _clear_log_file() -> None:
+    """Truncate the log file while keeping the active file handler open.
+
+    Returns:
+        None: This function is performed for its side effect.
+    """
+
     for handler in logger.handlers:
         if isinstance(handler, logging.FileHandler) and handler.stream is not None:
             handler.acquire()
@@ -36,28 +57,38 @@ def _clear_log_file() -> None:
         pass
 
 
-def logThis(arg: Union[str, object], clear: bool = False):
-    """Logs the given message to a log file.
+def logThis(arg: Union[str, object], clear: bool = False) -> None:
+    """Write a debug message to the add-on log when logging is enabled.
 
     Args:
-        arg (Union[str, object]): The message to log. If this is a function, it will be called and the return value will be logged.
-        clear (bool, optional): If True, the log file will be cleared before the message is logged. Defaults to False.
+        arg (Union[str, object]): The message to log, or a zero-argument callable that
+            returns the message.
+        clear (bool, optional): Whether to clear the log file before writing. Defaults to False.
+
+    Returns:
+        None: The message is written only when debug logging is enabled.
     """
-    from .config_parser import config_settings
+
+    from .config.parser import config_settings
 
     if config_settings["debug"]:
         message: str = str(arg() if callable(arg) else arg)
 
-        # Clear the log file if the 'clear' flag is set
+        # Clear the log file if the 'clear' flag is set.
         if clear:
             _clear_log_file()
 
-        # Log the message using our named logger
+        # Log the message using our named logger.
         logger.debug(message)
 
 
-def initialize_log_file():
-    """Initializes the log file by writing the current date and time to it."""
+def initialize_log_file() -> None:
+    """Seed the log file with a timestamp and legend.
+
+    Returns:
+        None: The log file is truncated and initialized for a fresh debug session.
+    """
+
     logThis(
         str(datetime.today())
         + """
