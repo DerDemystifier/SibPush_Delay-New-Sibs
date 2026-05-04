@@ -18,9 +18,28 @@ Note: It's also compatible with V3 Scheduler.
 
 The configuration of SibPush is straightforward and can be tailored to meet your study needs. Here are the settings you can tweak in the config file:
 
--   `interval`: The interval (in days) that must be surpassed by all siblings before new cards are introduced for review. Default is `21`.
+-   `default_interval`: The interval (in days) that must be surpassed by all siblings before new cards are introduced for review. Decks that are not listed in `custom_deck_rules` use this value. Default is `21`.
 
--   `ignored_decks`: A list of deck IDs or names that you want to exclude from the SibPush mechanism. For example, if you have decks that you don’t want to delay new cards on, add them here.
+-   `custom_deck_rules`: A list of deck-specific rules. Each rule uses the deck ID (`did`) as the stable identifier, while `name` is only there to make the config easier to read. Set `ignored` to `true` to exclude a deck from the SibPush mechanism. Use `interval` to override the maturity threshold for that specific deck.
+
+        Example:
+
+        ```json
+        "custom_deck_rules": [
+            {
+                "did": "1777739665453",
+                "name": "Siblings",
+                "ignored": false,
+                "interval": 18
+            },
+            {
+                "did": "1777739665454",
+                "name": "Big Deck",
+                "ignored": true,
+                "interval": 30
+            }
+        ]
+        ```
 
 -   `debug`: Set to `true` if you are debugging. When `debug` is true, the addon will log more information to `log.txt` file, which can be helpful for troubleshooting.
 

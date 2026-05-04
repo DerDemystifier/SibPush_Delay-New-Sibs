@@ -1,32 +1,96 @@
 import json
-from typing import Any, Union
+from typing import Any, Union, cast
 from aqt import mw
 from . import log_helper
 
+ignored_deck_ids: list[str] = []
+custom_deck_rules_by_did: dict[str, dict[str, Any]] = {}
+
+
+def _parse_int(value: Any, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _normalize_custom_deck_rule(rule: Any, default_interval: int) -> dict[str, Any] | None:
+    if not isinstance(rule, dict):
+        return None
+
+    rule_dict = cast(dict[str, object], rule)
+    did = str(rule_dict.get("did", "")).strip()
+    name = str(rule_dict.get("name", did)).strip() or did
+
+    if not did and not name:
+        return None
+
+    return {
+        "did": did,
+        "name": name,
+        "ignored": bool(rule_dict.get("ignored", False)),
+        "interval": _parse_int(rule_dict.get("interval", default_interval), default_interval),
+    }
+
+
+def _parse_custom_deck_rules(config: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if config is None:
+        return []
+
+    default_interval = _parse_int(config.get("default_interval", 21), 21)
+    raw_rules = config.get("custom_deck_rules")
+    if isinstance(raw_rules, list):
+        typed_rules = cast(list[object], raw_rules)
+        return [
+            normalized_rule
+            for rule in typed_rules
+            if (normalized_rule := _normalize_custom_deck_rule(rule, default_interval)) is not None
+        ]
+
+    return []
+
+
+def _extract_ignored_deck_ids(custom_deck_rules: list[dict[str, Any]]) -> list[str]:
+    return [
+        str(rule.get("did", "")).strip()
+        for rule in custom_deck_rules
+        if rule.get("ignored") and str(rule.get("did", "")).strip()
+    ]
+
+
+def _index_custom_deck_rules(custom_deck_rules: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    return {
+        str(rule.get("did", "")).strip(): rule
+        for rule in custom_deck_rules
+        if str(rule.get("did", "")).strip()
+    }
+
 
 def parse_config(
-    config: Union[dict[str, Any], None]
-) -> dict[str, Union[bool, int, list[str]]]:
-    """Parse the config object and return the values for debug, interval and ignored_decks.
+    config: Union[dict[str, Any], None],
+) -> dict[str, Union[bool, int, list[dict[str, Any]]]]:
+    """Parse the config object and return the values for debug, default_interval and custom_deck_rules.
 
     Args:
         config (dict[str, object]): The config object to parse.
 
     Returns:
-        tuple: A tuple of three values. The first value is the debug value, the second value is the interval value, the third value is the ignored_decks value.
+        dict: A dictionary containing debug, default_interval and custom_deck_rules.
     """
     debug = bool(config["debug"]) if config is not None else False
-    interval = int(config["interval"]) if config is not None else 0
-    ignored_decks: list[str] = (
-        list(config["ignored_decks"])
-        if config is not None and config["ignored_decks"] is not None
-        else []
+    default_interval = (
+        _parse_int(config.get("default_interval", 21), 21) if config is not None else 21
     )
+    custom_deck_rules = _parse_custom_deck_rules(config)
+
+    custom_deck_rules_by_did.clear()
+    custom_deck_rules_by_did.update(_index_custom_deck_rules(custom_deck_rules))
+    ignored_deck_ids[:] = _extract_ignored_deck_ids(custom_deck_rules)
 
     return {
         "debug": debug,
-        "interval": interval,
-        "ignored_decks": ignored_decks,
+        "default_interval": default_interval,
+        "custom_deck_rules": custom_deck_rules,
     }
 
 
@@ -70,8 +134,9 @@ def on_config_save(config_text: str, addon: str) -> str:
             lambda: (
                 "Config updated: "
                 f"debug={config_settings['debug']}, "
-                f"interval={config_settings['interval']}, "
-                f'ignored_decks={config_settings["ignored_decks"]}'
+                f"default_interval={config_settings['default_interval']}, "
+                f'custom_deck_rules={config_settings["custom_deck_rules"]}, '
+                f"ignored_deck_ids={ignored_deck_ids}"
             )
         )
 

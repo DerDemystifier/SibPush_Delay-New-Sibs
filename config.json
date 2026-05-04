@@ -1,5 +1,5 @@
 {
-    "interval": 21,
-    "ignored_decks": [],
+    "default_interval": 21,
+    "custom_deck_rules": [],
     "debug": false
 }
