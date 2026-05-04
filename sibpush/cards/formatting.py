@@ -1,7 +1,9 @@
+"""Human-readable card and note formatting helpers."""
+
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Optional, Sequence, TYPE_CHECKING, cast
+from collections.abc import Sequence
+from typing import Any, TYPE_CHECKING
 
 from anki.cards import (
     CARD_TYPE_NEW,
@@ -14,46 +16,40 @@ from anki.cards import (
     Card,
 )
 
+from .snapshots import CardSnapshot, capture_snapshots
+
 if TYPE_CHECKING:
     from anki.collection import Collection
 
 
-@dataclass(frozen=True)
-class CardSnapshot:
-    id: int
-    queue: int
-    type: int
-    ivl: int
-    due: int
-    did: int
-    flags: int
-
-
 def _deck_name_for_card(col: Collection, card: Card) -> str:
+    """Return the deck name for a card, or a fallback label when missing.
+
+    Args:
+        col (anki.collection.Collection): The collection that owns the card.
+        card (anki.cards.Card): The card whose deck name should be resolved.
+
+    Returns:
+        str: The resolved deck name or "Unknown Deck" when the deck cannot be found.
+    """
+
     deck = col.decks.get(card.did)
     if not deck:
         return "Unknown Deck"
     return str(deck.get("name", "Unknown Deck"))
 
 
-def capture_snapshots(cards: Sequence[Card]) -> list[CardSnapshot]:
-    """Capture the card state before it mutates so it can be rendered later."""
-
-    return [
-        CardSnapshot(
-            id=card.id,
-            queue=card.queue,
-            type=card.type,
-            ivl=card.ivl,
-            due=card.due,
-            did=card.did,
-            flags=card.flags,
-        )
-        for card in cards
-    ]
-
-
 def _status_label(queue: int, card_type: int) -> str:
+    """Convert Anki queue/type codes into a readable status label.
+
+    Args:
+        queue (int): The card queue value.
+        card_type (int): The card type value.
+
+    Returns:
+        str: A human-readable status label for the card.
+    """
+
     if queue == QUEUE_TYPE_SUSPENDED:
         return "SUSPENDED"
     if queue == QUEUE_TYPE_MANUALLY_BURIED:
@@ -70,6 +66,17 @@ def _status_label(queue: int, card_type: int) -> str:
 
 
 def _interval_label(queue: int, card_type: int, ivl: int) -> str:
+    """Render the interval text appropriate for the card state.
+
+    Args:
+        queue (int): The card queue value.
+        card_type (int): The card type value.
+        ivl (int): The card interval value.
+
+    Returns:
+        str: A compact interval string suitable for debug output.
+    """
+
     if queue in {QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_MANUALLY_BURIED, QUEUE_TYPE_SIBLING_BURIED}:
         return "—"
     if card_type == CARD_TYPE_NEW:
@@ -80,6 +87,15 @@ def _interval_label(queue: int, card_type: int, ivl: int) -> str:
 
 
 def _sort_key(snapshot: CardSnapshot) -> tuple[int, int, int, int]:
+    """Sort snapshots into review, new, and buried groups.
+
+    Args:
+        snapshot (CardSnapshot): The snapshot to order.
+
+    Returns:
+        tuple[int, int, int, int]: A stable sort key for log rendering.
+    """
+
     if snapshot.queue in {
         QUEUE_TYPE_SUSPENDED,
         QUEUE_TYPE_MANUALLY_BURIED,
@@ -101,6 +117,17 @@ def _format_snapshot_line(
     previous_status: str | None = None,
     indent: str = "      ",
 ) -> str:
+    """Format a single card snapshot line for debug output.
+
+    Args:
+        snapshot (CardSnapshot): The snapshot to render.
+        previous_status (str | None): The previous status label, when comparing before/after.
+        indent (str): The indentation prefix to use for the rendered line.
+
+    Returns:
+        str: A formatted log line for the snapshot.
+    """
+
     status = _status_label(snapshot.queue, snapshot.type)
     interval = _interval_label(snapshot.queue, snapshot.type, snapshot.ivl)
     suffix = f" (was {previous_status})" if previous_status and previous_status != status else ""
@@ -108,6 +135,17 @@ def _format_snapshot_line(
 
 
 def _format_note_header(note: Any, col: Collection, note_id: int) -> list[str]:
+    """Build the header lines for a note's log block.
+
+    Args:
+        note (Any): The Anki note to summarize.
+        col (anki.collection.Collection): The collection containing the note.
+        note_id (int): The note identifier to display.
+
+    Returns:
+        list[str]: The header lines for the rendered note block.
+    """
+
     note_type = note.note_type()
     model_name = str(note_type.get("name", "Unknown")) if note_type else "Unknown"
     tags = ", ".join(str(tag) for tag in getattr(note, "tags", [])) or "none"
@@ -120,12 +158,25 @@ def format_note_snapshot(
     note: Any,
     col: Collection,
     note_id: int,
-    snapshots: Sequence[CardSnapshot],
+    snapshots: list[CardSnapshot] | tuple[CardSnapshot, ...] | Sequence[CardSnapshot],
     section: str | None = None,
     previous_statuses: dict[int, str] | None = None,
     include_header: bool = True,
 ) -> str:
-    """Render one note snapshot in a compact readable block."""
+    """Render a note snapshot with optional section labeling.
+
+    Args:
+        note (Any): The note being rendered.
+        col (anki.collection.Collection): The collection containing the note.
+        note_id (int): The note identifier to display.
+        snapshots (Sequence[CardSnapshot]): The card snapshots to render.
+        section (str | None): Optional section heading such as "Before" or "After".
+        previous_statuses (dict[int, str] | None): Optional previous status labels keyed by card id.
+        include_header (bool): Whether to include the note header lines.
+
+    Returns:
+        str: A formatted multi-line log block for the note.
+    """
 
     lines = _format_note_header(note, col, note_id) if include_header else []
     if section:
@@ -145,11 +196,23 @@ def format_note_change(
     note: Any,
     col: Collection,
     note_id: int,
-    before_snapshots: Sequence[CardSnapshot],
-    after_snapshots: Sequence[CardSnapshot],
+    before_snapshots: list[CardSnapshot] | tuple[CardSnapshot, ...] | Sequence[CardSnapshot],
+    after_snapshots: list[CardSnapshot] | tuple[CardSnapshot, ...] | Sequence[CardSnapshot],
     action: str,
 ) -> str:
-    """Render a before/action/after block for a note processing step."""
+    """Render the before/action/after view of a note mutation.
+
+    Args:
+        note (Any): The note being rendered.
+        col (anki.collection.Collection): The collection containing the note.
+        note_id (int): The note identifier to display.
+        before_snapshots (Sequence[CardSnapshot]): The snapshots captured before mutation.
+        after_snapshots (Sequence[CardSnapshot]): The snapshots captured after mutation.
+        action (str): The description of the action that was taken.
+
+    Returns:
+        str: The formatted log block describing the change.
+    """
 
     before_statuses = {
         snapshot.id: _status_label(snapshot.queue, snapshot.type) for snapshot in before_snapshots
@@ -176,7 +239,14 @@ def format_note_change(
 
 
 def card_details(card: Card) -> str:
-    """Return a concise, human-readable summary for a single card."""
+    """Return a one-line summary for a single card.
+
+    Args:
+        card (anki.cards.Card): The card to describe.
+
+    Returns:
+        str: A compact, human-readable card summary.
+    """
 
     status = _status_label(card.queue, card.type)
     interval = _interval_label(card.queue, card.type, card.ivl)
@@ -184,9 +254,18 @@ def card_details(card: Card) -> str:
 
 
 def cards_details(
-    cards: Sequence[Card], col: Optional[Collection] = None, note_id: int | None = None
+    cards: Sequence[Card], col: Collection | None = None, note_id: int | None = None
 ) -> str:
-    """Format a group of sibling cards for readable debug logging."""
+    """Format a sibling group for readable debug logging.
+
+    Args:
+        cards (Sequence[anki.cards.Card]): The cards to render.
+        col (anki.collection.Collection | None): The collection for richer note-aware output.
+        note_id (int | None): Optional note identifier to display when a collection is provided.
+
+    Returns:
+        str: The formatted card summary block, or "(no cards)" when the input is empty.
+    """
 
     if not cards:
         return "(no cards)"
@@ -198,29 +277,3 @@ def cards_details(
     display_note_id = note_id if note_id is not None else getattr(note, "id", "unknown")
     snapshots = capture_snapshots(cards)
     return format_note_snapshot(note, col, display_note_id, snapshots)
-
-
-def classify_cards(
-    siblings: Sequence[Card], interval_threshold: int
-) -> tuple[list[Card], list[Card]]:
-    """Classify cards into new and immature cards.
-
-    Args:
-        siblings (Sequence[Card]): The cards to classify
-
-    Returns:
-        tuple: A tuple of two lists. The first list contains the new cards, the second list contains the immature cards.
-    """
-    new_cards: list[Card] = []
-    immature_cards: list[Card] = []
-    for sibling in siblings:
-        if sibling.queue == QUEUE_TYPE_SUSPENDED:
-            # This means the card is suspended, so we don't care about it
-            continue
-
-        if sibling.type == CARD_TYPE_NEW:
-            new_cards.append(sibling)
-        elif sibling.ivl < interval_threshold:
-            immature_cards.append(sibling)
-
-    return new_cards, immature_cards

@@ -9,7 +9,7 @@ def test_legacy_config_migrates_to_new_schema() -> None:
     """Legacy ignored_decks config should migrate into custom_deck_rules."""
 
     addon = load_addon_module()
-    config_migration = importlib.import_module(f"{addon.__name__}.config_migration")
+    config_migration = importlib.import_module(f"{addon.__name__}.sibpush.config.migration")
 
     migrated = config_migration._build_migrated_config(
         {
