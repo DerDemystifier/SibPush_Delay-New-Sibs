@@ -41,6 +41,7 @@ def process_note(col: Collection, note_id: int, coming_from_reviewer_hook: bool 
         # If we're not coming from the reviewer hook, ignored ids are already filtered out by the search query, so we cannot arrive here with an ignored note.
         return
 
+    # for logging purposes, capture the state of the siblings before processing.
     before_snapshots = capture_snapshots(siblings) if debug_enabled else None
 
     all_new_cards = [card for card in siblings if card.type == CARD_TYPE_NEW]
@@ -69,43 +70,46 @@ def process_note(col: Collection, note_id: int, coming_from_reviewer_hook: bool 
             # If new cards list is empty, then there are no new cards to process anymore, so skip to the next note.
             return
 
-        if note.has_tag(SUSPENDED_BY_ADDON_TAG):
-            # This means that some new cards of this note were previously suspended by the addon, so we can safely unsuspend the first card and suspend the rest (if not already suspended).
-            first_card = all_new_cards[0]
-            if first_card.queue == QUEUE_TYPE_SUSPENDED:
-                col.sched.unsuspend_cards([first_card.id])
-                changed = True
-                if coming_from_reviewer_hook:
-                    # Bury the card to not review right after after unsuspending.
-                    col.sched.bury_cards(ids=[first_card.id], manual=False)
-                    changed = True
+        has_addon_tag = note.has_tag(SUSPENDED_BY_ADDON_TAG)
 
-            # No need to re-suspend the others; they are already suspended.
+        # This means that some new cards of this note were previously suspended by the addon.
+        # Keep the first available new card active, but heal any later siblings that a user
+        # may have manually unsuspended by suspending them again.
+        first_new_card = all_new_cards[0]
+        if has_addon_tag and first_new_card.queue == QUEUE_TYPE_SUSPENDED:
+            col.sched.unsuspend_cards([first_new_card.id])
+            changed = True
 
-            # For debugging.
+        new_cards_to_suspend = [
+            card for card in all_new_cards[1:] if card.queue != QUEUE_TYPE_SUSPENDED
+        ]
+
+        if not has_addon_tag and not new_cards_to_suspend:
+            # If the note is not tagged as addon-managed and there are no trailing new cards,
+            # then there is nothing to do.
+            return
+
+        if coming_from_reviewer_hook:
+            # This means we've just seen the card that has just matured, so we should bury the
+            # next new card for tomorrow to not review right after.
+            col.sched.bury_cards(ids=[first_new_card.id], manual=False)
+            changed = True
+
+        if new_cards_to_suspend:
+            suspend_cards(col, new_cards_to_suspend, note_id)
+            changed = True
+
+        # For logging purposes.
+        if has_addon_tag:
+            action_taken = "Unsuspend the first new card"
             if coming_from_reviewer_hook:
                 action_taken = "Coming from reviewer hook: Unsuspend the first new card, then bury it for tomorrow"
-            else:
-                action_taken = "Unsuspend the first new card"
+            if new_cards_to_suspend:
+                action_taken += f" and suspend {len(new_cards_to_suspend)} trailing new card(s)"
+        elif coming_from_reviewer_hook:
+            action_taken = f"Coming from reviewer hook: bury the first new card for tomorrow and suspend {len(new_cards_to_suspend)} trailing new card(s)"
         else:
-            # If the note is not tagged as addon-managed, this means that this is a new note. So we should bury the first card for tomorrow and suspend the rest (if not already suspended).
-            new_cards_to_suspend = [
-                card for card in all_new_cards[1:] if card.queue != QUEUE_TYPE_SUSPENDED
-            ]
-
-            if not new_cards_to_suspend:
-                return
-
-            if coming_from_reviewer_hook:
-                # This means we've just seen the card that has just matured, so we should bury the next new card for tomorrow to not review right after.
-                first_new_card = all_new_cards[0]
-                # Bury the first card for tomorrow to not review right after.
-                col.sched.bury_cards(ids=[first_new_card.id], manual=False)
-                changed = True
-
-            suspend_cards(col, new_cards_to_suspend, note_id)
             action_taken = f"Suspend {len(new_cards_to_suspend)} trailing new card(s)"
-            changed = True
 
     if debug_enabled and changed and action_taken:
         updated_siblings = sorted(get_child_cards(col, note_id), key=lambda card: card.due)
