@@ -8,6 +8,7 @@ from typing import Any, cast
 from aqt import mw
 
 from ..logging_support import initialize_log_file, logThis
+from ..state import get_mw
 
 ignored_deck_ids: list[str] = []
 custom_deck_rules_by_did: dict[str, dict[str, Any]] = {}
@@ -154,6 +155,47 @@ def _index_custom_deck_rules(custom_deck_rules: list[dict[str, Any]]) -> dict[st
     }
 
 
+def _get_newly_ignored_deck_ids(
+    previous_ignored_deck_ids: list[str], current_ignored_deck_ids: list[str]
+) -> list[str]:
+    """Return deck ids that were just switched to ignored.
+
+    Args:
+        previous_ignored_deck_ids (list[str]): The ignored deck ids before the config save.
+        current_ignored_deck_ids (list[str]): The ignored deck ids after the config save.
+
+    Returns:
+        list[str]: Deck ids that are now ignored but were not ignored before.
+    """
+
+    previous_ids = set(previous_ignored_deck_ids)
+    return [
+        deck_id
+        for deck_id in current_ignored_deck_ids
+        if deck_id and deck_id not in previous_ids
+    ]
+
+
+def _unsuspend_cards_for_newly_ignored_decks(previous_ignored_deck_ids: list[str]) -> None:
+    """Undo the add-on's suspension for decks that just became ignored."""
+
+    newly_ignored_deck_ids = _get_newly_ignored_deck_ids(
+        previous_ignored_deck_ids, ignored_deck_ids
+    )
+    if not newly_ignored_deck_ids:
+        return
+
+    current_mw = get_mw()
+    col = getattr(current_mw, "col", None) if current_mw is not None else None
+    if col is None:
+        return
+
+    from ..processing.suspension import unsuspend_all_addon_cards_in_deck
+
+    for deck_id in newly_ignored_deck_ids:
+        unsuspend_all_addon_cards_in_deck(col, deck_id)
+
+
 def _parse_tag_rules(config: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
     """Extract the normalized tag rules mapping from a config object.
 
@@ -242,8 +284,10 @@ def on_config_save(config_text: str, addon: str) -> str:
 
     # Parse text argument as json.
     config: dict[str, object] = json.loads(config_text)
+    previous_ignored_deck_ids = list(ignored_deck_ids)
     debug_before = config_settings["debug"]
     config_settings |= parse_config(config)
+    _unsuspend_cards_for_newly_ignored_decks(previous_ignored_deck_ids)
 
     if config_settings["debug"]:
         if config_settings["debug"] != debug_before:

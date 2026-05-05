@@ -6,6 +6,7 @@ from collections.abc import Sequence
 
 from anki.cards import Card
 from anki.collection import Collection
+from anki.consts import QUEUE_TYPE_SUSPENDED
 
 from ..state import SUSPENDED_BY_ADDON_TAG
 from .query import get_deck_rule
@@ -48,3 +49,29 @@ def note_is_ignored_deck(card: Card) -> bool:
 
     rule = get_deck_rule(card)
     return bool(rule and rule.get("ignored"))
+
+
+def unsuspend_all_addon_cards_in_deck(col: Collection, deck_id: str) -> None:
+    """Unsuspend all add-on-managed cards in a specific deck.
+
+    Args:
+        col (anki.collection.Collection): The collection that owns the cards.
+        deck_id (str): The deck id to scan for suspended cards.
+
+    Returns:
+        None: The matching cards are unsuspended for their side effects.
+    """
+
+    card_ids_to_unsuspend: list[int] = []
+
+    for card_id in col.find_cards(f"did:{deck_id}"):
+        card = col.get_card(card_id)
+        if card.queue != QUEUE_TYPE_SUSPENDED:
+            continue
+
+        note = card.note()
+        if note.has_tag(SUSPENDED_BY_ADDON_TAG):
+            card_ids_to_unsuspend.append(card.id)
+
+    if card_ids_to_unsuspend:
+        col.sched.unsuspend_cards(card_ids_to_unsuspend)
