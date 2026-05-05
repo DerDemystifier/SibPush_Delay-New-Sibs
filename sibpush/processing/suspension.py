@@ -7,13 +7,13 @@ from collections.abc import Sequence
 from anki.cards import Card, CardId
 from anki.collection import Collection
 from anki.consts import QUEUE_TYPE_SUSPENDED
-from anki.notes import Note
+from anki.notes import Note, NoteId
 
 from ..state import SUSPENDED_BY_ADDON_TAG
 from .query import get_deck_rule
 
 
-def suspend_cards(col: Collection, cards_to_suspend: Sequence[Card], note_id: int) -> None:
+def suspend_cards(col: Collection, cards_to_suspend: Sequence[Card], note_id: NoteId) -> None:
     """Suspend a group of cards and mark their note as managed by the add-on.
 
     Args:
