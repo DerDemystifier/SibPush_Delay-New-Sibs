@@ -11,7 +11,7 @@ from anki.collection import Collection
 from anki.notes import Note, NoteId
 
 from ..config.parser import config_settings, custom_deck_rules_by_did, ignored_deck_ids
-from ..state import get_last_checked_state, get_mw
+from ..state import get_last_checked_state
 
 
 def get_tag_rule(note: Note) -> dict[str, Any] | None:
@@ -113,14 +113,8 @@ def get_child_cards(col: Collection, note_id: int) -> Sequence[Card]:
         Sequence[anki.cards.Card]: The cards belonging to the note.
     """
 
-    card_ids = col.find_cards(query=f"nid:{note_id}")
-    current_mw = get_mw()
-    if not current_mw or not current_mw.col or not current_mw.col.db:
-        raise Exception("SibPush : Anki is not initialized properly")
-
-    # You can also conduct searches using the db connection directly.
-    # card_ids = mw.col.db.list("select id from cards where nid=?", note_id)
-    return [current_mw.col.get_card(card_id) for card_id in card_ids]
+    card_ids = col.card_ids_of_note(note_id)
+    return [col.get_card(card_id) for card_id in card_ids]
 
 
 def should_run_work(col: Collection) -> tuple[bool, tuple[str, Sequence[NoteId]]]:
