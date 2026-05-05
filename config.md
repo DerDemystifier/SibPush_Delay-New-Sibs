@@ -10,6 +10,8 @@
 
 -   **Type**: List of objects
 -   **Description**: Specifies the decks that should use a custom rule. Each entry uses the deck ID (`did`) as the stable identifier; `name` is only for readability in the config file. `interval` overrides `default_interval` for that deck.
+
+    The deck browser also exposes a `SibPush` submenu for the current deck so you can toggle `ignored` or update `interval` without editing the config file directly.
 -   **Example**:
 
     ```json

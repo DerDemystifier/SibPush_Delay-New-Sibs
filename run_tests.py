@@ -8,6 +8,12 @@ from testing.scenarios.test_bury_next_sibling_for_tagged_four_card_notes import 
 from testing.scenarios.test_custom_deck_interval_overrides_default_interval import (
     test_custom_deck_interval_overrides_default_interval,
 )
+from testing.scenarios.test_deck_actions_save_and_refresh import (
+    test_update_custom_deck_rule_unsuspends_cards_when_deck_becomes_ignored,
+)
+from testing.scenarios.test_deck_browser_menu_actions import (
+    test_deck_browser_submenu_toggles_ignore_and_sets_interval,
+)
 from testing.scenarios.test_ignore_custom_deck_rule_by_deck_id import (
     test_ignores_custom_deck_rule_by_deck_id,
 )
@@ -58,6 +64,8 @@ tests = {
     "test_ignores_custom_deck_rule_by_deck_id": test_ignores_custom_deck_rule_by_deck_id,
     "test_migrates_legacy_config_into_custom_deck_rules": test_migrates_legacy_config_into_custom_deck_rules,
     "test_custom_deck_interval_overrides_default_interval": test_custom_deck_interval_overrides_default_interval,
+    "test_update_custom_deck_rule_unsuspends_cards_when_deck_becomes_ignored": test_update_custom_deck_rule_unsuspends_cards_when_deck_becomes_ignored,
+    "test_deck_browser_submenu_toggles_ignore_and_sets_interval": test_deck_browser_submenu_toggles_ignore_and_sets_interval,
     "test_tag_rule_takes_precedence_over_custom_deck_interval": test_tag_rule_takes_precedence_over_custom_deck_interval,
     "test_ignored_deck_skips_matching_tag_rule": test_ignored_deck_skips_matching_tag_rule,
     "test_on_config_save_unsuspends_addon_cards_for_newly_ignored_deck": test_on_config_save_unsuspends_addon_cards_for_newly_ignored_deck,
