@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from datetime import date
-from typing import Any
+from typing import Any, cast
 
-from anki.cards import Card
+from anki.cards import Card, CardId
 from anki.collection import Collection
 from anki.notes import Note, NoteId
 
@@ -24,21 +24,25 @@ def get_tag_rule(note: Note) -> dict[str, Any] | None:
         dict[str, Any] | None: The matching rule, or None when no tag rule applies.
     """
 
-    raw_tag_rules = config_settings.get("tag_rules", {})
+    raw_tag_rules = config_settings["tag_rules"]
     if not isinstance(raw_tag_rules, dict):
         return None
 
     note_tags = {str(tag).strip() for tag in getattr(note, "tags", []) if str(tag).strip()}
-    for raw_tag, rule in raw_tag_rules.items():
+    typed_tag_rules = cast(dict[str, Any], raw_tag_rules)
+    for raw_tag, rule in typed_tag_rules.items():
         tag = str(raw_tag).strip()
         if tag and tag in note_tags and isinstance(rule, dict):
-            return rule
+            return cast(dict[str, Any], rule)
 
     return None
 
 
 def get_new_note_ids(col: Collection) -> Sequence[NoteId]:
-    """Return the ids of all new notes that are not in ignored decks.
+    """Return the ids of new notes with more than one card that are not in ignored decks.
+
+    Single-card notes are excluded up front because process_note skips them anyway,
+    so filtering them here avoids loading their cards later.
 
     Args:
         col (anki.collection.Collection): The collection to search.
@@ -49,7 +53,23 @@ def get_new_note_ids(col: Collection) -> Sequence[NoteId]:
 
     ignored_query = " ".join(f"-did:{deck_id}" for deck_id in ignored_deck_ids if deck_id)
     query = f"is:new {ignored_query}".strip()
-    return col.find_notes(query)
+    all_new_nids = col.find_notes(query)
+
+    if not all_new_nids:
+        return []
+
+    db = col.db
+    if db is None:
+        return []
+
+    # Keep only notes that have more than one card, single-card notes (no sibling cards) are skipped by process_note anyway, so there is no point fetching their siblings later, as they would have none.
+    nid_list = ",".join(str(n) for n in all_new_nids)
+    return cast(
+        list[NoteId],
+        db.list(
+            f"SELECT nid FROM cards WHERE nid IN ({nid_list}) GROUP BY nid HAVING COUNT(*) > 1"
+        ),
+    )
 
 
 def get_deck_rule(card: Card) -> dict[str, Any] | None:
@@ -77,7 +97,7 @@ def get_deck_interval(card: Card) -> int:
 
     rule = get_deck_rule(card)
     if rule is None:
-        return int(config_settings["default_interval"])
+        return cast(int, config_settings["default_interval"])
 
     return int(rule["interval"])
 
@@ -102,7 +122,7 @@ def get_note_interval(note: Note, card: Card) -> int:
     return get_deck_interval(card)
 
 
-def get_child_cards(col: Collection, note_id: int) -> Sequence[Card]:
+def get_child_cards(col: Collection, note_id: NoteId) -> Sequence[Card]:
     """Return all sibling cards belonging to a note.
 
     Args:
@@ -117,8 +137,61 @@ def get_child_cards(col: Collection, note_id: int) -> Sequence[Card]:
     return [col.get_card(card_id) for card_id in card_ids]
 
 
+def get_all_child_cards_batch(
+    col: Collection, note_ids: Sequence[NoteId]
+) -> dict[NoteId, list[Card]]:
+    """Return all sibling cards for a batch of notes in a single database query.
+
+    This is the batch equivalent of calling get_child_cards once per note. It issues
+    a single SQL query to fetch every card id grouped by note, then hydrates each Card
+    object, which eliminates the N×2 database round-trips that the per-note path incurs.
+
+    Args:
+        col (anki.collection.Collection): The collection to search.
+        note_ids (Sequence[anki.notes.NoteId]): The note ids whose cards should be loaded.
+
+    Returns:
+        dict[int, list[anki.cards.Card]]: A mapping from note id to the list of its cards.
+            Notes with no cards in the database are absent from the mapping.
+    """
+
+    if not note_ids:
+        return {}
+
+    db = col.db
+    if db is None:
+        return {}
+
+    nid_list = ",".join(str(n) for n in note_ids)
+    card_ids_by_nid: dict[NoteId, list[CardId]] = {}
+    rows = cast(list[tuple[NoteId, CardId]], db.all(f"SELECT nid, id FROM cards WHERE nid IN ({nid_list})"))
+    for nid, cid in rows:
+        card_ids_by_nid.setdefault(nid, []).append(cid)
+
+    return {nid: [col.get_card(cid) for cid in cids] for nid, cids in card_ids_by_nid.items()}
+
+
+def _note_ids_fingerprint(note_ids: Sequence[NoteId]) -> int:
+    """Return a cheap O(1) fingerprint for a sequence of note ids.
+
+    Using a frozenset hash means the comparison in should_run_work is constant-time
+    regardless of collection size, unlike comparing two full sequences element-by-element.
+
+    Args:
+        note_ids (Sequence[anki.notes.NoteId]): The note ids to fingerprint.
+
+    Returns:
+        int: A hash value that changes whenever the set of ids changes.
+    """
+
+    return hash(frozenset(note_ids))
+
+
 def should_run_work(col: Collection) -> tuple[bool, tuple[str, Sequence[NoteId]]]:
     """Decide whether the batch note-processing pass should run.
+
+    The cache stores a fingerprint of the note-id set rather than the raw list so that
+    the staleness check is O(1) regardless of how many new notes are in the collection.
 
     Args:
         col (anki.collection.Collection): The collection to inspect for new notes.
@@ -135,8 +208,10 @@ def should_run_work(col: Collection) -> tuple[bool, tuple[str, Sequence[NoteId]]
     if last_checked_state is None:
         return True, (today, current_new_note_ids)
 
-    # Compare the current state with the last checked state to decide whether to run the processing.
+    # Compare date and a cheap fingerprint instead of the full id sequence.
     last_checked_date, last_checked_new_note_ids = last_checked_state
-    should_run = last_checked_date != today or last_checked_new_note_ids != current_new_note_ids
+    should_run = last_checked_date != today or _note_ids_fingerprint(
+        last_checked_new_note_ids
+    ) != _note_ids_fingerprint(current_new_note_ids)
 
     return should_run, (today, current_new_note_ids)
