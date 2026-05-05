@@ -27,6 +27,9 @@ from testing.scenarios.test_preserve_user_suspended_siblings import (
 from testing.scenarios.test_reveal_next_sibling_for_tagged_four_card_notes import (
     test_process_all_notes_reveals_the_next_sibling_for_tagged_four_card_notes,
 )
+from testing.scenarios.test_resuspend_reintroduced_sibling_for_tagged_four_card_notes import (
+    test_process_all_notes_resuspends_a_reintroduced_sibling_for_tagged_four_card_notes,
+)
 from testing.scenarios.test_suspend_new_siblings_when_an_immature_review_card_exists import (
     test_suspends_new_siblings_when_an_immature_review_card_exists,
 )
@@ -43,6 +46,7 @@ def main() -> None:
         "test_preserves_user_suspended_siblings_without_retagging": test_preserves_user_suspended_siblings_without_retagging,
         "test_process_note_only_updates_the_target_note_from_reviewer_hook": test_process_note_only_updates_the_target_note_from_reviewer_hook,
         "test_process_all_notes_reveals_the_next_sibling_for_tagged_four_card_notes": test_process_all_notes_reveals_the_next_sibling_for_tagged_four_card_notes,
+        "test_process_all_notes_resuspends_a_reintroduced_sibling_for_tagged_four_card_notes": test_process_all_notes_resuspends_a_reintroduced_sibling_for_tagged_four_card_notes,
         "test_reviewer_hook_buries_the_next_sibling_for_tagged_four_card_notes": test_reviewer_hook_buries_the_next_sibling_for_tagged_four_card_notes,
         "test_keeps_one_new_card_available_for_a_fresh_three_card_note": test_keeps_one_new_card_available_for_a_fresh_three_card_note,
         "test_ignores_custom_deck_rule_by_deck_id": test_ignores_custom_deck_rule_by_deck_id,
@@ -53,7 +57,7 @@ def main() -> None:
     }
     for test_name, test_func in tests.items():
         print("\n" * 10)
-        print(f"[↓ RUNNING TEST ↓] : {test_name}")
+        print(f"[↓ RUNNING TEST ↓] : {test_name}", end="\n\n")
         test_func()
         print(f"[↑ TEST SUCCESSFUL ↑] : {test_name}")
 

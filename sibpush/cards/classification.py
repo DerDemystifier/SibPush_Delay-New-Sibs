@@ -11,6 +11,8 @@ def classify_cards(
     siblings: Sequence[Card], interval_threshold: int
 ) -> tuple[list[Card], list[Card]]:
     """Split sibling cards into new and immature groups.
+    Immature cards are those that have a review interval below the given threshold, meaning they have been reviewed at least once but haven't reached a certain level of maturity yet.
+    New cards are those that haven't been reviewed at all.
 
     Args:
         siblings (Sequence[anki.cards.Card]): The sibling cards to classify.
