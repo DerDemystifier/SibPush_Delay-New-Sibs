@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from anki.cards import Card
+from anki.cards import Card, CardId
 from anki.collection import Collection
 from anki.consts import QUEUE_TYPE_SUSPENDED
+from anki.notes import Note
 
 from ..state import SUSPENDED_BY_ADDON_TAG
 from .query import get_deck_rule
@@ -37,6 +38,32 @@ def suspend_cards(col: Collection, cards_to_suspend: Sequence[Card], note_id: in
     col.sched.suspend_cards([card.id for card in cards_to_suspend])
 
 
+def remove_suspension_tag_if_no_suspended_cards(
+    col: Collection, note: Note, cards: Sequence[Card]
+) -> bool:
+    """Remove the add-on suspension tag when the provided cards have no suspended cards left.
+
+    Args:
+        col (anki.collection.Collection): The collection that owns the note.
+        note (anki.notes.Note): The note to inspect and update.
+        cards (Sequence[anki.cards.Card]): The cards to inspect for suspension.
+
+    Returns:
+        bool: True when the tag was removed, otherwise False.
+    """
+
+    for card in cards:
+        if card.queue == QUEUE_TYPE_SUSPENDED:
+            return False
+
+    if not note.has_tag(SUSPENDED_BY_ADDON_TAG):
+        return False
+
+    note.remove_tag(SUSPENDED_BY_ADDON_TAG)
+    col.update_note(note)
+    return True
+
+
 def note_is_ignored_deck(card: Card) -> bool:
     """Return whether a card belongs to a deck marked as ignored.
 
@@ -62,7 +89,8 @@ def unsuspend_all_addon_cards_in_deck(col: Collection, deck_id: str) -> None:
         None: The matching cards are unsuspended for their side effects.
     """
 
-    card_ids_to_unsuspend: list[int] = []
+    card_ids_to_unsuspend: list[CardId] = []
+    notes_to_prune: dict[int, Note] = {}
 
     for card_id in col.find_cards(f"did:{deck_id}"):
         card = col.get_card(card_id)
@@ -72,6 +100,10 @@ def unsuspend_all_addon_cards_in_deck(col: Collection, deck_id: str) -> None:
         note = card.note()
         if note.has_tag(SUSPENDED_BY_ADDON_TAG):
             card_ids_to_unsuspend.append(card.id)
+            notes_to_prune[note.id] = note
 
     if card_ids_to_unsuspend:
         col.sched.unsuspend_cards(card_ids_to_unsuspend)
+
+    for note in notes_to_prune.values():
+        remove_suspension_tag_if_no_suspended_cards(col, note, note.cards())

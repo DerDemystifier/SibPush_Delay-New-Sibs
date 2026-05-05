@@ -11,7 +11,11 @@ from ..config.parser import config_settings
 from ..logging_support import logThis
 from ..state import SUSPENDED_BY_ADDON_TAG, sync_last_checked_state
 from .query import get_child_cards, get_note_interval, should_run_work
-from .suspension import note_is_ignored_deck, suspend_cards
+from .suspension import (
+    note_is_ignored_deck,
+    remove_suspension_tag_if_no_suspended_cards,
+    suspend_cards,
+)
 
 
 def process_note(col: Collection, note_id: int, coming_from_reviewer_hook: bool = False) -> None:
@@ -99,6 +103,14 @@ def process_note(col: Collection, note_id: int, coming_from_reviewer_hook: bool 
             suspend_cards(col, new_cards_to_suspend, note_id)
             changed = True
 
+        # If the note has the addon tag but there are no new cards left to suspend, then we should remove the stale addon tag.
+        tag_removed = False
+        if has_addon_tag:
+            tag_removed = remove_suspension_tag_if_no_suspended_cards(
+                col, note, note.cards()
+            )
+            changed = changed or tag_removed
+
         # For logging purposes.
         if has_addon_tag:
             action_taken = "Unsuspend the first new card"
@@ -106,6 +118,8 @@ def process_note(col: Collection, note_id: int, coming_from_reviewer_hook: bool 
                 action_taken = "Coming from reviewer hook: Unsuspend the first new card, then bury it for tomorrow"
             if new_cards_to_suspend:
                 action_taken += f" and suspend {len(new_cards_to_suspend)} trailing new card(s)"
+            elif tag_removed:
+                action_taken += " and remove the stale suspension tag"
         elif coming_from_reviewer_hook:
             action_taken = f"Coming from reviewer hook: bury the first new card for tomorrow and suspend {len(new_cards_to_suspend)} trailing new card(s)"
         else:

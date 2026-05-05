@@ -78,7 +78,7 @@ def test_update_custom_deck_rule_unsuspends_cards_when_deck_becomes_ignored() ->
         assert fake_manager.writes
         assert fake_manager.writes[-1]["custom_deck_rules"][0]["ignored"] is True
         assert_card_queues(col, cards, [QUEUE_TYPE_REV, QUEUE_TYPE_NEW, QUEUE_TYPE_NEW])
-        assert col.get_note(note.id).has_tag(addon.SUSPENDED_BY_ADDON_TAG)
+        assert not col.get_note(note.id).has_tag(addon.SUSPENDED_BY_ADDON_TAG)
 
 
 if __name__ == "__main__":

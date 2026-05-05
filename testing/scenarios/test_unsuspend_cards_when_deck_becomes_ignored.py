@@ -81,7 +81,7 @@ def test_on_config_save_unsuspends_addon_cards_for_newly_ignored_deck() -> None:
         print_collection_state(col, "After config save (newly ignored deck unsuspended)")
 
         assert_card_queues(col, cards, [QUEUE_TYPE_REV, QUEUE_TYPE_NEW, QUEUE_TYPE_NEW])
-        assert col.get_note(note.id).has_tag(addon.SUSPENDED_BY_ADDON_TAG)
+        assert not col.get_note(note.id).has_tag(addon.SUSPENDED_BY_ADDON_TAG)
 
 
 if __name__ == "__main__":
