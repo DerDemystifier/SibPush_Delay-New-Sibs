@@ -1,55 +1,55 @@
 """Root test runner for the addon integration tests."""
 
-from testing.test_leave_one_active import (
-    test_leaves_one_new_card_when_all_siblings_mature,
+from testing.scenarios.test_bury_next_sibling_for_tagged_four_card_notes import (
+    test_reviewer_hook_buries_the_next_sibling_for_tagged_four_card_notes,
 )
-from testing.test_already_suspended_cards import (
-    test_leaves_pre_suspended_cards_untouched,
+from testing.scenarios.test_custom_deck_interval_overrides_default_interval import (
+    test_custom_deck_interval_overrides_default_interval,
 )
-from testing.test_suspend_when_immature import (
-    test_suspend_new_cards_if_immature_sibling_exists,
+from testing.scenarios.test_ignore_custom_deck_rule_by_deck_id import (
+    test_ignores_custom_deck_rule_by_deck_id,
 )
-from testing.test_process_single_note import (
-    test_process_single_note_while_reviewing,
+from testing.scenarios.test_keep_one_new_card_available_for_a_fresh_three_card_note import (
+    test_keeps_one_new_card_available_for_a_fresh_three_card_note,
 )
-from testing.test_process_all_notes_with_tagged_four_card_note import (
-    test_process_all_notes_unsuspends_the_third_card_for_a_tagged_four_card_note,
+from testing.scenarios.test_keep_one_new_card_available_when_all_review_siblings_are_mature import (
+    test_keeps_one_new_card_available_when_all_review_siblings_are_mature,
 )
-from testing.test_process_note_reviewer_hook_tagged_four_card_note import (
-    test_process_note_buries_the_third_card_when_called_from_reviewer_hook,
+from testing.scenarios.test_migrate_legacy_config_into_custom_deck_rules import (
+    test_migrates_legacy_config_into_custom_deck_rules,
 )
-from testing.test_all_new_cards_one_available import (
-    test_start_work_keeps_one_card_available_for_a_fresh_three_card_note,
+from testing.scenarios.test_process_a_single_note_without_touching_other_notes import (
+    test_process_note_only_updates_the_target_note_from_reviewer_hook,
 )
-from testing.test_ignored_custom_deck_rule import (
-    test_ignored_custom_deck_rule_uses_deck_id,
+from testing.scenarios.test_preserve_user_suspended_siblings import (
+    test_preserves_user_suspended_siblings_without_retagging,
 )
-from testing.test_legacy_config_migration import (
-    test_legacy_config_migrates_to_new_schema,
+from testing.scenarios.test_reveal_next_sibling_for_tagged_four_card_notes import (
+    test_process_all_notes_reveals_the_next_sibling_for_tagged_four_card_notes,
 )
-from testing.test_custom_deck_interval import (
-    test_custom_deck_interval_overrides_default_threshold,
+from testing.scenarios.test_suspend_new_siblings_when_an_immature_review_card_exists import (
+    test_suspends_new_siblings_when_an_immature_review_card_exists,
 )
-from testing.test_tag_rule_interval_precedence import (
-    test_tag_rule_is_ignored_for_ignored_deck,
-    test_tag_rule_overrides_custom_deck_interval,
+from testing.scenarios.test_tag_rule_precedence_and_ignored_deck_behavior import (
+    test_ignored_deck_skips_matching_tag_rule,
+    test_tag_rule_takes_precedence_over_custom_deck_interval,
 )
 
 
 def main() -> None:
     tests = {
-        "test_suspend_new_cards_if_immature_sibling_exists": test_suspend_new_cards_if_immature_sibling_exists,
-        "test_leaves_one_new_card_when_all_siblings_mature": test_leaves_one_new_card_when_all_siblings_mature,
-        "test_leaves_pre_suspended_cards_untouched": test_leaves_pre_suspended_cards_untouched,
-        "test_process_note_only_updates_the_requested_note": test_process_single_note_while_reviewing,
-        "test_process_all_notes_unsuspends_the_third_card_for_a_tagged_four_card_note": test_process_all_notes_unsuspends_the_third_card_for_a_tagged_four_card_note,
-        "test_process_note_buries_the_third_card_when_called_from_reviewer_hook": test_process_note_buries_the_third_card_when_called_from_reviewer_hook,
-        "test_start_work_keeps_one_card_available_for_a_fresh_three_card_note": test_start_work_keeps_one_card_available_for_a_fresh_three_card_note,
-        "test_ignored_custom_deck_rule_uses_deck_id": test_ignored_custom_deck_rule_uses_deck_id,
-        "test_legacy_config_migrates_to_new_schema": test_legacy_config_migrates_to_new_schema,
-        "test_custom_deck_interval_overrides_default_threshold": test_custom_deck_interval_overrides_default_threshold,
-        "test_tag_rule_overrides_custom_deck_interval": test_tag_rule_overrides_custom_deck_interval,
-        "test_tag_rule_is_ignored_for_ignored_deck": test_tag_rule_is_ignored_for_ignored_deck,
+        "test_suspends_new_siblings_when_an_immature_review_card_exists": test_suspends_new_siblings_when_an_immature_review_card_exists,
+        "test_keeps_one_new_card_available_when_all_review_siblings_are_mature": test_keeps_one_new_card_available_when_all_review_siblings_are_mature,
+        "test_preserves_user_suspended_siblings_without_retagging": test_preserves_user_suspended_siblings_without_retagging,
+        "test_process_note_only_updates_the_target_note_from_reviewer_hook": test_process_note_only_updates_the_target_note_from_reviewer_hook,
+        "test_process_all_notes_reveals_the_next_sibling_for_tagged_four_card_notes": test_process_all_notes_reveals_the_next_sibling_for_tagged_four_card_notes,
+        "test_reviewer_hook_buries_the_next_sibling_for_tagged_four_card_notes": test_reviewer_hook_buries_the_next_sibling_for_tagged_four_card_notes,
+        "test_keeps_one_new_card_available_for_a_fresh_three_card_note": test_keeps_one_new_card_available_for_a_fresh_three_card_note,
+        "test_ignores_custom_deck_rule_by_deck_id": test_ignores_custom_deck_rule_by_deck_id,
+        "test_migrates_legacy_config_into_custom_deck_rules": test_migrates_legacy_config_into_custom_deck_rules,
+        "test_custom_deck_interval_overrides_default_interval": test_custom_deck_interval_overrides_default_interval,
+        "test_tag_rule_takes_precedence_over_custom_deck_interval": test_tag_rule_takes_precedence_over_custom_deck_interval,
+        "test_ignored_deck_skips_matching_tag_rule": test_ignored_deck_skips_matching_tag_rule,
     }
     for test_name, test_func in tests.items():
         print("\n" * 10)
