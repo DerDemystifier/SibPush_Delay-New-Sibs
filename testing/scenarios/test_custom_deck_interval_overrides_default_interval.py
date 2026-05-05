@@ -2,16 +2,21 @@ from __future__ import annotations
 
 from anki.consts import QUEUE_TYPE_NEW, QUEUE_TYPE_REV, QUEUE_TYPE_SUSPENDED
 
-from .addon_utils import load_addon_module, patched_addon_state
-from .card_utils import assert_card_queues, set_review_card_state
-from .collection_utils import temporary_collection
-from .note_utils import add_note_with_siblings, build_test_notetype, make_test_deck_id
-from .print_utils import print_collection_state
+from ..addon_utils import load_addon_module, patched_addon_state
+from ..card_utils import assert_card_queues, set_review_card_state
+from ..collection_utils import temporary_collection
+from ..note_utils import add_note_with_siblings, build_test_notetype, make_test_deck_id
+from ..print_utils import print_collection_state
 
 
-def test_custom_deck_interval_overrides_default_threshold() -> None:
-    """A deck-specific interval should override the global default_interval."""
+def test_custom_deck_interval_overrides_default_interval() -> None:
+    """
+    Scenario: Case when one deck has a custom interval threshold and another deck still relies on
+    the default interval.
 
+    The addon should use the deck-specific interval for the custom deck while continuing to apply
+    the default threshold everywhere else.
+    """
     with temporary_collection() as col:
         addon = load_addon_module()
         model = build_test_notetype(col)
@@ -30,7 +35,10 @@ def test_custom_deck_interval_overrides_default_threshold() -> None:
         set_review_card_state(col, custom_cards[0], ivl=20)
         set_review_card_state(col, default_cards[0], ivl=20)
 
-        print_collection_state(col, "Before processing (custom interval vs default)")
+        print(
+            "Before processing the custom and default decks, both notes have the same review interval but only one deck will use a custom threshold."
+        )
+        print_collection_state(col, "Before processing (custom interval vs default interval)")
 
         with patched_addon_state(col) as patched_addon:
             rule = {
@@ -46,7 +54,10 @@ def test_custom_deck_interval_overrides_default_threshold() -> None:
 
             patched_addon.process_all_notes(col)
 
-        print_collection_state(col, "After processing (custom interval (18d) vs default)")
+        print(
+            "After processing, the custom deck should treat ivl=20 as mature because its threshold is lower, while the default deck should still suspend its extra siblings."
+        )
+        print_collection_state(col, "After processing (custom interval wins for the custom deck)")
 
         assert_card_queues(
             col, custom_cards, [QUEUE_TYPE_REV, QUEUE_TYPE_NEW, QUEUE_TYPE_SUSPENDED]
@@ -59,4 +70,4 @@ def test_custom_deck_interval_overrides_default_threshold() -> None:
 
 
 if __name__ == "__main__":
-    test_custom_deck_interval_overrides_default_threshold()
+    test_custom_deck_interval_overrides_default_interval()
