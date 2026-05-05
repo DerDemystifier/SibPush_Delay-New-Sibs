@@ -39,6 +39,38 @@ class AddonModule(Protocol):
     SUSPENDED_BY_ADDON_TAG: str
 
 
+class FakeAddonManager:
+    """Minimal add-on manager stub for config-save tests."""
+
+    def __init__(self, config: dict[str, object] | None = None) -> None:
+        self._config = deepcopy(config or {})
+        self.writes: list[dict[str, object]] = []
+
+    def getConfig(self, _addon_name: str) -> dict[str, object]:
+        return deepcopy(self._config)
+
+    def writeConfig(self, *args: object) -> None:
+        if len(args) == 2:
+            _, config = args
+        elif len(args) == 1:
+            (config,) = args
+        else:
+            raise TypeError("writeConfig expects one or two arguments")
+
+        if not isinstance(config, dict):
+            raise TypeError("config must be a dictionary")
+
+        self._config = deepcopy(config)
+        self.writes.append(deepcopy(config))
+
+    def setConfig(self, *args: object) -> None:
+        self.writeConfig(*args)
+
+    @property
+    def config(self) -> dict[str, object]:
+        return deepcopy(self._config)
+
+
 def load_addon_module() -> Any:
     """Load the addon package from the repository root for test execution.
 
@@ -85,7 +117,9 @@ def _load_test_modules() -> tuple[Any, Any, Any]:
 
 
 @contextmanager
-def patched_addon_state(col: "Collection") -> Generator[AddonModule, None, None]:
+def patched_addon_state(
+    col: "Collection", addon_manager: FakeAddonManager | None = None
+) -> Generator[AddonModule, None, None]:
     """
     Patch the addon state so processing helpers can run against a test collection.
 
@@ -112,7 +146,7 @@ def patched_addon_state(col: "Collection") -> Generator[AddonModule, None, None]
     original_custom_deck_rules_by_did = deepcopy(parser_module.custom_deck_rules_by_did)
 
     # Mock the main window to provide access to our test collection.
-    state_module.mw = SimpleNamespace(col=col)
+    state_module.mw = SimpleNamespace(col=col, addonManager=addon_manager)
     state_module.last_checked_state = None
     addon.mw = state_module.mw
     addon.last_checked_state = None

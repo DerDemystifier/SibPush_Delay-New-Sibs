@@ -13,6 +13,7 @@ from .config.migration import migrate_legacy_config
 from .config.parser import on_config_save
 from .logging_support import initialize_log_file
 from .processing.notes import process_all_notes, process_note
+from .ui.deck_actions import add_deck_actions_to_options_menu
 
 
 def collection_did_load(col: Collection) -> None:
@@ -86,6 +87,7 @@ def register_hooks() -> None:
 
     gui_hooks.collection_did_load.append(collection_did_load)
     gui_hooks.deck_browser_did_render.append(browser_render)
+    gui_hooks.deck_browser_will_show_options_menu.append(add_deck_actions_to_options_menu)
     gui_hooks.reviewer_did_answer_card.append(reviewer_did_answer_card)
     gui_hooks.addon_config_editor_will_update_json.append(on_config_save)
     gui_hooks.addons_dialog_will_delete_addons.append(on_addon_delete)

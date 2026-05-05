@@ -22,6 +22,8 @@ The configuration of SibPush is straightforward and can be tailored to meet your
 
 -   `custom_deck_rules`: A list of deck-specific rules. Each rule uses the deck ID (`did`) as the stable identifier, while `name` is only there to make the config easier to read. Set `ignored` to `true` to exclude a deck from the SibPush mechanism. Use `interval` to override the maturity threshold for that specific deck.
 
+    You can manage the current deck's SibPush rule from the deck browser's `SibPush` submenu instead of editing JSON by hand.
+
 -   `tag_rules`: A dictionary of tag-specific rules. Each key is a note tag name, and each rule uses `interval` to override the maturity threshold for notes with that tag. Tag rules take precedence over deck rules, but ignored decks still win.
 
         Example:
