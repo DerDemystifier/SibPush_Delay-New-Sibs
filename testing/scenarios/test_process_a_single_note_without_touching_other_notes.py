@@ -33,9 +33,9 @@ def test_process_note_only_updates_the_target_note_from_reviewer_hook() -> None:
         print_collection_state(col, "Before processing single note (target vs control)")
 
         with patched_addon_state(col) as patched_addon:
-            assert patched_addon.last_checked_state is None
+            assert patched_addon.last_full_scan_date is None
             patched_addon.process_note(col, target_note.id, coming_from_reviewer_hook=True)
-            assert patched_addon.last_checked_state is None
+            assert patched_addon.last_full_scan_date is None
 
         print(
             "After processing the note, the next card is buried until tomorrow, and the other cards from the same note are suspended. The remaining notes stay unprocessed."

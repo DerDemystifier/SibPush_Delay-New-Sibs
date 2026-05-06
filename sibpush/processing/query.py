@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import date
 from typing import Any, cast
 
 from anki.cards import Card, CardId
@@ -11,7 +10,7 @@ from anki.collection import Collection
 from anki.notes import Note, NoteId
 
 from ..config.parser import config_settings, custom_deck_rules_by_did, ignored_deck_ids
-from ..state import get_last_checked_state
+from ..state import SUSPENDED_BY_ADDON_TAG, get_last_unmanaged_note_ids
 
 
 def get_tag_rule(note: Note) -> dict[str, Any] | None:
@@ -63,6 +62,40 @@ def get_new_note_ids(col: Collection) -> Sequence[NoteId]:
         return []
 
     # Keep only notes that have more than one card, single-card notes (no sibling cards) are skipped by process_note anyway, so there is no point fetching their siblings later, as they would have none.
+    nid_list = ",".join(str(n) for n in all_new_nids)
+    return cast(
+        list[NoteId],
+        db.list(
+            f"SELECT nid FROM cards WHERE nid IN ({nid_list}) GROUP BY nid HAVING COUNT(*) > 1"
+        ),
+    )
+
+
+def get_new_unmanaged_note_ids(col: Collection) -> Sequence[NoteId]:
+    """Return the ids of new notes that still need add-on processing.
+
+    This is the narrower recurring scan used after the initial startup/day-change full pass.
+    It keeps the ignored-deck filter and excludes notes already marked with the add-on tag so
+    later browser refreshes and sync completions only revisit genuinely unmanaged notes.
+
+    Args:
+        col (anki.collection.Collection): The collection to search.
+
+    Returns:
+        Sequence[anki.notes.NoteId]: The ids of the matching unmanaged new notes.
+    """
+
+    ignored_query = " ".join(f"-did:{deck_id}" for deck_id in ignored_deck_ids if deck_id)
+    query = f"is:new -tag:{SUSPENDED_BY_ADDON_TAG} {ignored_query}".strip()
+    all_new_nids = col.find_notes(query)
+
+    if not all_new_nids:
+        return []
+
+    db = col.db
+    if db is None:
+        return []
+
     nid_list = ",".join(str(n) for n in all_new_nids)
     return cast(
         list[NoteId],
@@ -174,7 +207,7 @@ def get_all_child_cards_batch(
 def _note_ids_fingerprint(note_ids: Sequence[NoteId]) -> int:
     """Return a cheap O(1) fingerprint for a sequence of note ids.
 
-    Using a frozenset hash means the comparison in should_run_work is constant-time
+    Using a frozenset hash means the comparison in should_run_unmanaged_notes is constant-time
     regardless of collection size, unlike comparing two full sequences element-by-element.
 
     Args:
@@ -187,31 +220,29 @@ def _note_ids_fingerprint(note_ids: Sequence[NoteId]) -> int:
     return hash(frozenset(note_ids))
 
 
-def should_run_work(col: Collection) -> tuple[bool, tuple[str, Sequence[NoteId]]]:
-    """Decide whether the batch note-processing pass should run.
+def should_run_unmanaged_notes(col: Collection) -> tuple[bool, Sequence[NoteId]]:
+    """Decide whether the unmanaged-note follow-up pass should run.
 
-    The cache stores a fingerprint of the note-id set rather than the raw list so that
-    the staleness check is O(1) regardless of how many new notes are in the collection.
+    The unmanaged pass is the lighter recurring scan that only revisits new notes that do not yet
+    carry the add-on tag. Its cache stores only the last unmanaged note ids so repeated passes can
+    skip work when the unmanaged candidate set has not changed.
 
     Args:
-        col (anki.collection.Collection): The collection to inspect for new notes.
+        col (anki.collection.Collection): The collection to inspect for unmanaged new notes.
 
     Returns:
-        tuple[bool, tuple[str, Sequence[anki.notes.NoteId]]]: A tuple containing a boolean flag
-            indicating whether work should run and the current cache state.
+        tuple[bool, Sequence[anki.notes.NoteId]]: A tuple containing a boolean flag indicating
+            whether work should run and the current unmanaged note ids.
     """
 
-    today = date.today().isoformat()
-    current_new_note_ids = get_new_note_ids(col)
-    last_checked_state = get_last_checked_state()
+    current_unmanaged_note_ids = get_new_unmanaged_note_ids(col)
+    last_unmanaged_note_ids = get_last_unmanaged_note_ids()
 
-    if last_checked_state is None:
-        return True, (today, current_new_note_ids)
+    if last_unmanaged_note_ids is None:
+        return True, current_unmanaged_note_ids
 
-    # Compare date and a cheap fingerprint instead of the full id sequence.
-    last_checked_date, last_checked_new_note_ids = last_checked_state
-    should_run = last_checked_date != today or _note_ids_fingerprint(
-        last_checked_new_note_ids
-    ) != _note_ids_fingerprint(current_new_note_ids)
+    should_run = _note_ids_fingerprint(last_unmanaged_note_ids) != _note_ids_fingerprint(
+        current_unmanaged_note_ids
+    )
 
-    return should_run, (today, current_new_note_ids)
+    return should_run, current_unmanaged_note_ids

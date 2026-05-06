@@ -27,12 +27,15 @@ class AddonModule(Protocol):
     """Type protocol representing the test-facing addon facade."""
 
     mw: Any
-    last_checked_state: tuple[str, Sequence["NoteId"]] | None
+    last_full_scan_date: str | None
+    last_unmanaged_note_ids: Sequence["NoteId"] | None
     config_settings: dict[str, object]
     custom_deck_rules_by_did: dict[str, dict[str, object]]
     ignored_deck_ids: list[str]
 
     def process_all_notes(self, col: "Collection") -> None: ...
+
+    def process_new_unmanaged_notes(self, col: "Collection") -> None: ...
 
     def process_note(self, col: "Collection", note_id: int, coming_from_reviewer_hook: bool = False) -> None: ...
 
@@ -125,31 +128,36 @@ def patched_addon_state(
 
     This context manager:
     1. Swaps the shared `mw` handle for the provided test collection.
-    2. Resets internal state caches (`last_checked_state`).
+    2. Resets internal state caches (`last_full_scan_date` and `last_unmanaged_note_ids`).
     3. Configures test-specific settings (`default_interval=21`, no custom deck rules).
     4. Restores original state on exit.
     """
     addon = load_addon_module()
     state_module, parser_module, notes_module = _load_test_modules()
     addon.mw = state_module.mw
-    addon.last_checked_state = state_module.last_checked_state
+    addon.last_full_scan_date = state_module.last_full_scan_date
+    addon.last_unmanaged_note_ids = state_module.last_unmanaged_note_ids
     addon.config_settings = parser_module.config_settings
     addon.custom_deck_rules_by_did = parser_module.custom_deck_rules_by_did
     addon.ignored_deck_ids = parser_module.ignored_deck_ids
     addon.process_all_notes = notes_module.process_all_notes
+    addon.process_new_unmanaged_notes = notes_module.process_new_unmanaged_notes
     addon.process_note = notes_module.process_note
 
     original_mw = state_module.mw
-    original_last_checked_state = state_module.last_checked_state
+    original_last_full_scan_date = state_module.last_full_scan_date
+    original_last_unmanaged_note_ids = state_module.last_unmanaged_note_ids
     original_config = deepcopy(parser_module.config_settings)
     original_ignored_deck_ids = list(parser_module.ignored_deck_ids)
     original_custom_deck_rules_by_did = deepcopy(parser_module.custom_deck_rules_by_did)
 
     # Mock the main window to provide access to our test collection.
     state_module.mw = SimpleNamespace(col=col, addonManager=addon_manager)
-    state_module.last_checked_state = None
+    state_module.last_full_scan_date = None
+    state_module.last_unmanaged_note_ids = None
     addon.mw = state_module.mw
-    addon.last_checked_state = None
+    addon.last_full_scan_date = None
+    addon.last_unmanaged_note_ids = None
 
     # Configure test environment.
     parser_module.config_settings.clear()
@@ -165,9 +173,11 @@ def patched_addon_state(
     finally:
         # Restore state to prevent leakage between tests.
         state_module.mw = original_mw
-        state_module.last_checked_state = original_last_checked_state
+        state_module.last_full_scan_date = original_last_full_scan_date
+        state_module.last_unmanaged_note_ids = original_last_unmanaged_note_ids
         addon.mw = original_mw
-        addon.last_checked_state = original_last_checked_state
+        addon.last_full_scan_date = original_last_full_scan_date
+        addon.last_unmanaged_note_ids = original_last_unmanaged_note_ids
         parser_module.config_settings.clear()
         parser_module.config_settings.update(deepcopy(original_config))
         parser_module.ignored_deck_ids[:] = original_ignored_deck_ids
