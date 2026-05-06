@@ -45,7 +45,9 @@ def _build_migrated_config(
 
     lookup = deck_lookup or {}
     migrated_rules: list[dict[str, Any]] = []
-    default_interval = parser._parse_int(config.get("default_interval", config.get("interval", 21)), 21)
+    default_interval = parser._parse_int(
+        config.get("default_interval", config.get("interval", 21)), 21
+    )
 
     for deck_label in legacy_ignored_decks:
         raw_label = str(deck_label).strip()
@@ -54,6 +56,8 @@ def _build_migrated_config(
 
         did = lookup.get(raw_label)
         if did is None and raw_label.isdigit():
+            # Legacy configs may already have stored the deck id as text; keep that value
+            # when there is no current deck-name match to translate it back.
             did = raw_label
 
         if did is None:
@@ -90,7 +94,9 @@ def migrate_legacy_config() -> bool:
     if migrated_config is None:
         return False
 
-    write_config = getattr(addon_manager, "writeConfig", None) or getattr(addon_manager, "setConfig", None)
+    write_config = getattr(addon_manager, "writeConfig", None) or getattr(
+        addon_manager, "setConfig", None
+    )
     if write_config is None:
         raise AttributeError("Anki add-on manager does not provide a config write method")
 

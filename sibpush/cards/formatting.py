@@ -96,6 +96,8 @@ def _sort_key(snapshot: CardSnapshot) -> tuple[int, int, int, int]:
         tuple[int, int, int, int]: A stable sort key for log rendering.
     """
 
+    # Group cards in the order most readers care about first: review cards, then new cards,
+    # then buried/suspended cards, with due/id/interval used as stable tie-breakers.
     if snapshot.queue in {
         QUEUE_TYPE_SUSPENDED,
         QUEUE_TYPE_MANUALLY_BURIED,
@@ -214,6 +216,8 @@ def format_note_change(
         str: The formatted log block describing the change.
     """
 
+    # Capture the before-state labels up front so the "After" section can annotate cards
+    # whose status changed during the mutation.
     before_statuses = {
         snapshot.id: _status_label(snapshot.queue, snapshot.type) for snapshot in before_snapshots
     }

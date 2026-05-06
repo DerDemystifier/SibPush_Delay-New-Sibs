@@ -9,6 +9,11 @@ from aqt import mw as _mw
 from anki.notes import NoteId
 
 mw: Any = _mw
+
+# These caches intentionally track two different triggers:
+# - `last_full_scan_date` gates the expensive browser-driven scan.
+# - `last_unmanaged_note_ids` gates the lighter follow-up pass that only revisits
+#   new notes that are still unmanaged by the add-on.
 last_full_scan_date: str | None = None
 last_unmanaged_note_ids: Sequence[NoteId] | None = None
 SUSPENDED_BY_ADDON_TAG = "SibPush-suspended"

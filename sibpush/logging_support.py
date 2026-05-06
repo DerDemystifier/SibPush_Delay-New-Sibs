@@ -90,8 +90,7 @@ def initialize_log_file() -> None:
     """
 
     logThis(
-        str(datetime.today())
-        + """
+        str(datetime.today()) + """
 # Legend for card details:
 #   Type: 0=new, 1=learning, 2=due
 #   Queue: same as above, plus: -1=suspended, -2=user buried, -3=sched buried
