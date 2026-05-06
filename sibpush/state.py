@@ -9,7 +9,8 @@ from aqt import mw as _mw
 from anki.notes import NoteId
 
 mw: Any = _mw
-last_checked_state: tuple[str, Sequence[NoteId]] | None = None
+last_full_scan_date: str | None = None
+last_unmanaged_note_ids: Sequence[NoteId] | None = None
 SUSPENDED_BY_ADDON_TAG = "SibPush-suspended"
 
 
@@ -23,26 +24,50 @@ def get_mw() -> Any:
     return mw
 
 
-def get_last_checked_state() -> tuple[str, Sequence[NoteId]] | None:
-    """Return the cached batch-processing state.
+def get_last_full_scan_date() -> str | None:
+    """Return the date of the most recent full browser-driven scan.
 
     Returns:
-        tuple[str, Sequence[anki.notes.NoteId]] | None: The last cached state, or None when
-            the batch workflow has not run yet.
+        str | None: The ISO date of the last completed full scan, or None when it has not run yet.
     """
 
-    return last_checked_state
+    return last_full_scan_date
 
 
-def sync_last_checked_state(state: tuple[str, Sequence[NoteId]] | None) -> None:
-    """Update the cached batch-processing state.
+def sync_last_full_scan_date(value: str | None) -> None:
+    """Update the cached date for the most recent full browser-driven scan.
 
     Args:
-        state (tuple[str, Sequence[anki.notes.NoteId]] | None): The new cached state.
+        value (str | None): The new ISO date for the completed full scan.
 
     Returns:
         None: The module-level cache is updated in place.
     """
 
-    global last_checked_state
-    last_checked_state = state
+    global last_full_scan_date
+    last_full_scan_date = value
+
+
+def get_last_unmanaged_note_ids() -> Sequence[NoteId] | None:
+    """Return the note ids from the last unmanaged-note batch processing pass.
+
+    Returns:
+        Sequence[anki.notes.NoteId] | None: The last cached unmanaged note ids, or None when
+            the unmanaged workflow has not run yet.
+    """
+
+    return last_unmanaged_note_ids
+
+
+def sync_last_unmanaged_note_ids(note_ids: Sequence[NoteId] | None) -> None:
+    """Update the cached unmanaged-note batch-processing note ids.
+
+    Args:
+        note_ids (Sequence[anki.notes.NoteId] | None): The new unmanaged note ids.
+
+    Returns:
+        None: The module-level cache is updated in place.
+    """
+
+    global last_unmanaged_note_ids
+    last_unmanaged_note_ids = note_ids

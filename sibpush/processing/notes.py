@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 from collections.abc import Sequence
+from datetime import date
 
 from anki.cards import CARD_TYPE_NEW, QUEUE_TYPE_SUSPENDED, Card
 from anki.collection import Collection
@@ -11,8 +12,18 @@ from ..cards.classification import classify_cards
 from ..cards.formatting import capture_snapshots, format_note_change
 from ..config.parser import config_settings
 from ..logging_support import logThis
-from ..state import SUSPENDED_BY_ADDON_TAG, sync_last_checked_state
-from .query import get_all_child_cards_batch, get_child_cards, get_note_interval, should_run_work
+from ..state import (
+    SUSPENDED_BY_ADDON_TAG,
+    sync_last_full_scan_date,
+    sync_last_unmanaged_note_ids,
+)
+from .query import (
+    get_all_child_cards_batch,
+    get_child_cards,
+    get_new_note_ids,
+    get_note_interval,
+    should_run_unmanaged_notes,
+)
 from .suspension import (
     note_is_ignored_deck,
     remove_suspension_tag_if_no_suspended_cards,
@@ -151,6 +162,18 @@ def process_note(
         )
 
 
+def _process_note_batch(col: Collection, note_ids: Sequence[NoteId]) -> None:
+    """Process a batch of notes."""
+
+    if config_settings["debug"]:
+        logThis(lambda: f"Processing {len(note_ids)} new note(s)")
+
+    all_siblings_by_nid = get_all_child_cards_batch(col, note_ids)
+
+    for note_id in note_ids:
+        process_note(col, note_id, prefetched_siblings=all_siblings_by_nid.get(note_id))
+
+
 def process_all_notes(col: Collection) -> None:
     """Process every eligible new note in the collection.
 
@@ -161,20 +184,29 @@ def process_all_notes(col: Collection) -> None:
         None: The collection is updated in place.
     """
 
-    should_run, current_state = should_run_work(col)
-    if False and not should_run:  # Keep False for debugging purposes.
-        # No need to run the processing again on this render pass.
+    current_full_scan_date = date.today().isoformat()
+    new_note_ids = get_new_note_ids(col)
+
+    _process_note_batch(col, new_note_ids)
+    sync_last_full_scan_date(current_full_scan_date)
+
+
+def process_new_unmanaged_notes(col: Collection) -> None:
+    """Process only unmanaged new notes in the collection.
+
+    This is the lighter recurring scan used after the initial startup/day-change full pass.
+    It only revisits notes that are still new and do not already have the add-on tag.
+
+    Args:
+        col (anki.collection.Collection): The collection to process.
+
+    Returns:
+        None: The collection is updated in place.
+    """
+
+    should_run, current_unmanaged_note_ids = should_run_unmanaged_notes(col)
+    if not should_run:
         return
 
-    new_note_ids = current_state[1]
-
-    if config_settings["debug"]:
-        logThis(lambda: f"Processing {len(new_note_ids)} new note(s)")
-
-    # Load all child cards (siblings) for every eligible note in a single DB fetch, otherwise we would have to query the DB for child cards of each note in process_note, which would be very inefficient.
-    all_siblings_by_nid = get_all_child_cards_batch(col, new_note_ids)
-
-    for new_note_id in new_note_ids:
-        process_note(col, new_note_id, prefetched_siblings=all_siblings_by_nid.get(new_note_id))
-
-    sync_last_checked_state(current_state)
+    _process_note_batch(col, current_unmanaged_note_ids)
+    sync_last_unmanaged_note_ids(current_unmanaged_note_ids)
