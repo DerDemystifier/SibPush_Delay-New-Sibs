@@ -61,7 +61,8 @@ def get_new_note_ids(col: Collection) -> Sequence[NoteId]:
     if db is None:
         return []
 
-    # Keep only notes that have more than one card, single-card notes (no sibling cards) are skipped by process_note anyway, so there is no point fetching their siblings later, as they would have none.
+    # Keep only notes that have more than one card; single-card notes are skipped later
+    # anyway, so filtering them here avoids an extra card lookup for notes with no siblings.
     nid_list = ",".join(str(n) for n in all_new_nids)
     return cast(
         list[NoteId],
@@ -96,6 +97,8 @@ def get_new_unmanaged_note_ids(col: Collection) -> Sequence[NoteId]:
     if db is None:
         return []
 
+    # This uses the same sibling-count pruning as the full scan, but also excludes notes
+    # already marked with the add-on tag so the recurring unmanaged pass stays narrow.
     nid_list = ",".join(str(n) for n in all_new_nids)
     return cast(
         list[NoteId],
@@ -197,7 +200,9 @@ def get_all_child_cards_batch(
 
     nid_list = ",".join(str(n) for n in note_ids)
     card_ids_by_nid: dict[NoteId, list[CardId]] = {}
-    rows = cast(list[tuple[NoteId, CardId]], db.all(f"SELECT nid, id FROM cards WHERE nid IN ({nid_list})"))
+    rows = cast(
+        list[tuple[NoteId, CardId]], db.all(f"SELECT nid, id FROM cards WHERE nid IN ({nid_list})")
+    )
     for nid, cid in rows:
         card_ids_by_nid.setdefault(nid, []).append(cid)
 
@@ -241,6 +246,8 @@ def should_run_unmanaged_notes(col: Collection) -> tuple[bool, Sequence[NoteId]]
     if last_unmanaged_note_ids is None:
         return True, current_unmanaged_note_ids
 
+    # Compare set fingerprints instead of full sequences so we can cheaply detect whether
+    # the unmanaged candidate set changed without caring about ordering noise from SQL.
     should_run = _note_ids_fingerprint(last_unmanaged_note_ids) != _note_ids_fingerprint(
         current_unmanaged_note_ids
     )

@@ -1,4 +1,21 @@
-"""Anki hook callbacks for the SibPush add-on."""
+"""Anki hook callbacks for the SibPush add-on.
+
+This module registers all the Anki hooks that trigger SibPush's sibling management.
+The addon uses several hooks to monitor and respond to user actions:
+
+1. collection_did_load: Initialize on startup
+2. browser_render: Main processing trigger (scans notes when deck browser opens)
+3. reviewer_did_answer_card: Process note after user reviews a card
+4. sync_did_finish: Process newly synced cards
+5. addon_config_editor_will_update_json: Handle config changes
+6. addons_dialog_will_delete_addons: Clean shutdown
+
+The key insight is that SibPush runs in two modes:
+- Full scan (once per day): Processes all notes with the addon tag
+- Incremental scan (after sync/browser refresh): Only processes new unmanaged notes
+
+This two-tier approach balances thoroughness with performance.
+"""
 
 from __future__ import annotations
 
@@ -17,7 +34,6 @@ from .logging_support import initialize_log_file
 from .processing.notes import process_all_notes, process_new_unmanaged_notes, process_note
 from .state import get_last_full_scan_date, get_mw
 from .ui.deck_actions import add_deck_actions_to_options_menu
-
 
 _pending_full_scan = False
 
@@ -39,6 +55,22 @@ def collection_did_load(col: Collection) -> None:
 def browser_render(browser: Any) -> None:
     """Process notes when the Deck Browser refreshes.
 
+    This is the main entry point for SibPush's processing logic. It runs in two modes:
+
+    MODE 1 - Full Scan (once per day):
+    - Triggered on the first browser render each day
+    - Processes ALL notes with new cards (excluding ignored decks)
+    - Updates the last_full_scan_date to today
+    - Uses a 2-second delay to avoid blocking the UI thread
+
+    MODE 2 - Incremental Scan (subsequent renders same day):
+    - Triggered on subsequent browser renders after the daily full scan
+    - Only processes new notes that don't have the SibPush_suspended tag
+    - Much faster since it skips already-managed notes
+
+    The _pending_full_scan flag prevents duplicate full scans if the browser
+    renders multiple times before the delayed scan completes.
+
     Args:
         browser (Any): The browser instance emitted by the hook.
 
@@ -51,24 +83,37 @@ def browser_render(browser: Any) -> None:
 
     global _pending_full_scan
 
+    # Check if we need to run a full scan today
     current_full_scan_date = get_last_full_scan_date()
     today = date.today().isoformat()
+
     if current_full_scan_date is None or current_full_scan_date != today:
+        # MODE 1: Full scan needed (first render of the day or never scanned)
+
         if _pending_full_scan:
+            # A full scan is already scheduled - don't schedule another
             return
 
         _pending_full_scan = True
 
         def _run_full_scan(col: Collection = browser.mw.col) -> None:
+            """Execute the full scan in a delayed callback.
+
+            The delay prevents blocking Anki's UI during startup.
+            The try/finally ensures _pending_full_scan is always reset.
+            """
             global _pending_full_scan
             try:
                 process_all_notes(col)
             finally:
                 _pending_full_scan = False
 
+        # Schedule the full scan with a 2-second delay to let Anki finish loading
         cast(Any, QTimer).singleShot(2000, _run_full_scan)
         return
 
+    # MODE 2: Incremental scan (same day, after full scan completed)
+    # Only process notes that are new and don't have the addon tag yet
     process_new_unmanaged_notes(browser.mw.col)
 
 

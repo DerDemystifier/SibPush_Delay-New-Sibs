@@ -52,6 +52,8 @@ def remove_suspension_tag_if_no_suspended_cards(
         bool: True when the tag was removed, otherwise False.
     """
 
+    # Only drop the add-on tag once every sibling has been checked and none of them remain
+    # suspended; otherwise a later pass would lose track of cards that still need restoring.
     for card in cards:
         if card.queue == QUEUE_TYPE_SUSPENDED:
             return False
@@ -106,4 +108,6 @@ def unsuspend_all_addon_cards_in_deck(col: Collection, deck_id: str) -> None:
         col.sched.unsuspend_cards(card_ids_to_unsuspend)
 
     for note in notes_to_prune.values():
+        # Re-check the whole sibling set after unsuspending because the tag should remain
+        # until the last add-on-managed suspended card on the note is gone.
         remove_suspension_tag_if_no_suspended_cards(col, note, note.cards())

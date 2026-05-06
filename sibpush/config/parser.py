@@ -11,8 +11,12 @@ from aqt import mw
 from ..logging_support import initialize_log_file, logThis
 from ..state import get_mw
 
-ignored_deck_ids: list[str] = []
-custom_deck_rules_by_did: dict[str, dict[str, Any]] = {}
+# Module-level state that caches parsed configuration data.
+# These values are derived from the raw config, kept in sync by parse_config(),
+# and treated as read-only by the rest of the package.
+# `did` is the stable deck identifier; `name` is only for display.
+ignored_deck_ids: list[str] = []  # Deck IDs that should be skipped by the add-on.
+custom_deck_rules_by_did: dict[str, dict[str, Any]] = {}  # Per-deck rules indexed by deck ID.
 
 
 def _addon_module_name() -> str:
@@ -27,7 +31,11 @@ def _addon_module_name() -> str:
 
 
 def _get_addon_manager() -> Any | None:
-    """Return the live add-on manager when Anki is running."""
+    """Return the live add-on manager when Anki is running.
+
+    Returns:
+        Any | None: The Anki add-on manager instance, or None if unavailable.
+    """
 
     current_mw = get_mw()
     if current_mw is not None and hasattr(current_mw, "addonManager"):
@@ -78,9 +86,7 @@ def _normalize_custom_deck_rule(rule: Any, default_interval: int) -> dict[str, A
         "did": did,
         "name": name,
         "ignored": bool(rule_dict.get("ignored", False)),
-        "interval": _parse_int(
-            rule_dict.get("interval", default_interval), default_interval
-        ),
+        "interval": _parse_int(rule_dict.get("interval", default_interval), default_interval),
     }
 
 
@@ -99,11 +105,7 @@ def _normalize_tag_rule(rule: Any, default_interval: int) -> dict[str, Any] | No
         return None
 
     rule_dict = cast(dict[str, object], rule)
-    return {
-        "interval": _parse_int(
-            rule_dict.get("interval", default_interval), default_interval
-        )
-    }
+    return {"interval": _parse_int(rule_dict.get("interval", default_interval), default_interval)}
 
 
 def _parse_custom_deck_rules(config: dict[str, Any] | None) -> list[dict[str, Any]]:
@@ -167,13 +169,30 @@ def _index_custom_deck_rules(custom_deck_rules: list[dict[str, Any]]) -> dict[st
 
 
 def get_custom_deck_rule(deck_id: str) -> dict[str, Any] | None:
-    """Return the normalized custom rule for a deck id, if one exists."""
+    """Return the normalized custom rule for a deck id, if one exists.
+
+    Args:
+        deck_id (str): The deck identifier to look up.
+
+    Returns:
+        dict[str, Any] | None: The normalized rule dictionary, or None if no rule exists.
+    """
 
     return custom_deck_rules_by_did.get(str(deck_id).strip())
 
 
 def get_custom_deck_rule_snapshot(deck_id: str) -> dict[str, Any]:
-    """Return the current deck rule state in a UI-friendly form."""
+    """Return the current deck rule state in a UI-friendly form.
+
+    This function returns a complete rule snapshot with all fields populated,
+    using defaults when no custom rule exists for the deck.
+
+    Args:
+        deck_id (str): The deck identifier to look up.
+
+    Returns:
+        dict[str, Any]: A dictionary containing 'did', 'name', 'ignored', and 'interval' keys.
+    """
 
     rule = get_custom_deck_rule(deck_id) or {}
     default_interval = _parse_int(config_settings.get("default_interval", 21), 21)
@@ -188,7 +207,22 @@ def get_custom_deck_rule_snapshot(deck_id: str) -> dict[str, Any]:
 def _prepare_custom_deck_rule(
     config: dict[str, Any], deck_id: str, deck_name: str
 ) -> dict[str, Any]:
-    """Return the deck rule to mutate, creating one when needed."""
+    """Return the deck rule to mutate, creating one when needed.
+
+    This function ensures a deck rule exists in the config for the given deck,
+    creating a new rule with default values if one doesn't already exist.
+
+    Args:
+        config (dict[str, Any]): The configuration dictionary to modify.
+        deck_id (str): The deck identifier for the rule.
+        deck_name (str): The human-readable deck name for display.
+
+    Returns:
+        dict[str, Any]: The deck rule dictionary that can be mutated in place.
+
+    Raises:
+        ValueError: If deck_id is empty or whitespace-only.
+    """
 
     normalized_deck_id = str(deck_id).strip()
     if not normalized_deck_id:
@@ -225,8 +259,20 @@ def _prepare_custom_deck_rule(
 
 
 def refresh_config_state(config: dict[str, Any]) -> dict[str, Any]:
-    """Parse a config object and refresh the in-memory runtime state."""
+    """Parse a config object and refresh the in-memory runtime state.
 
+    This function updates the global config_settings dictionary with parsed values
+    from the provided config. It also handles unsuspending cards in decks that have
+    been newly marked as ignored.
+
+    Args:
+        config (dict[str, Any]): The raw configuration dictionary to parse.
+
+    Returns:
+        dict[str, Any]: The refreshed config_settings dictionary.
+    """
+
+    # Capture the old ignored-deck list before parse_config() mutates the shared caches.
     previous_ignored_deck_ids = list(ignored_deck_ids)
     config_settings.clear()
     config_settings.update(parse_config(config))
@@ -235,11 +281,26 @@ def refresh_config_state(config: dict[str, Any]) -> dict[str, Any]:
 
 
 def save_config_state(config: dict[str, Any]) -> dict[str, Any]:
-    """Persist a config object and refresh the in-memory runtime state."""
+    """Persist a config object and refresh the in-memory runtime state.
+
+    This function writes the configuration to disk via Anki's add-on manager
+    and then refreshes the cached runtime state.
+
+    Args:
+        config (dict[str, Any]): The configuration dictionary to save.
+
+    Returns:
+        dict[str, Any]: The refreshed config_settings dictionary.
+
+    Raises:
+        AttributeError: If the add-on manager doesn't provide a config write method.
+    """
 
     addon_manager = _get_addon_manager()
     if addon_manager is not None:
-        write_config = getattr(addon_manager, "writeConfig", None) or getattr(addon_manager, "setConfig", None)
+        write_config = getattr(addon_manager, "writeConfig", None) or getattr(
+            addon_manager, "setConfig", None
+        )
         if write_config is None:
             raise AttributeError("Anki add-on manager does not provide a config write method")
 
@@ -258,7 +319,20 @@ def update_custom_deck_rule(
     ignored: bool | None = None,
     interval: int | None = None,
 ) -> dict[str, Any]:
-    """Update one deck rule and save the resulting configuration."""
+    """Update one deck rule and save the resulting configuration.
+
+    This function modifies (or creates) a custom deck rule and persists the
+    configuration changes. At least one of 'ignored' or 'interval' should be provided.
+
+    Args:
+        deck_id (str): The deck identifier to update.
+        deck_name (str): The human-readable deck name.
+        ignored (bool | None): If provided, set the ignored state for the deck.
+        interval (int | None): If provided, set the maturity interval threshold for the deck.
+
+    Returns:
+        dict[str, Any]: The updated rule dictionary.
+    """
 
     updated_config = deepcopy(config_settings)
     rule = _prepare_custom_deck_rule(updated_config, deck_id, deck_name)
@@ -288,14 +362,22 @@ def _get_newly_ignored_deck_ids(
 
     previous_ids = set(previous_ignored_deck_ids)
     return [
-        deck_id
-        for deck_id in current_ignored_deck_ids
-        if deck_id and deck_id not in previous_ids
+        deck_id for deck_id in current_ignored_deck_ids if deck_id and deck_id not in previous_ids
     ]
 
 
 def _unsuspend_cards_for_newly_ignored_decks(previous_ignored_deck_ids: list[str]) -> None:
-    """Undo the add-on's suspension for decks that just became ignored."""
+    """Undo the add-on's suspension for decks that just became ignored.
+
+    When a deck is marked as ignored, cards that were suspended by the add-on
+    should be unsuspended since the add-on will no longer manage them.
+
+    Args:
+        previous_ignored_deck_ids (list[str]): The ignored deck ids before the config save.
+
+    Returns:
+        None: Cards are unsuspended as a side effect.
+    """
 
     newly_ignored_deck_ids = _get_newly_ignored_deck_ids(
         previous_ignored_deck_ids, ignored_deck_ids
@@ -311,6 +393,8 @@ def _unsuspend_cards_for_newly_ignored_decks(previous_ignored_deck_ids: list[str
     from ..processing.suspension import unsuspend_all_addon_cards_in_deck
 
     for deck_id in newly_ignored_deck_ids:
+        # Once a deck becomes ignored, the add-on stops managing it, so restore any
+        # cards it had suspended before leaving the deck alone from that point on.
         unsuspend_all_addon_cards_in_deck(col, deck_id)
 
 
@@ -361,7 +445,9 @@ def parse_config(
     """
 
     debug = bool(config["debug"]) if config is not None else False
-    default_interval = _parse_int(config.get("default_interval", 21), 21) if config is not None else 21
+    default_interval = (
+        _parse_int(config.get("default_interval", 21), 21) if config is not None else 21
+    )
     custom_deck_rules = _parse_custom_deck_rules(config)
     tag_rules = _parse_tag_rules(config)
 
@@ -377,9 +463,12 @@ def parse_config(
     }
 
 
-# Get the config object for your addon.
+# Initialize the add-on configuration at module load time
+# This happens when Anki loads the add-on, ensuring config is available immediately
 addon_manager: Any | None = getattr(mw, "addonManager", None) if mw else None
-config: dict[str, Any] | None = addon_manager.getConfig(_addon_module_name()) if addon_manager is not None else None
+config: dict[str, Any] | None = (
+    addon_manager.getConfig(_addon_module_name()) if addon_manager is not None else None
+)
 config_settings: dict[str, bool | int | list[dict[str, Any]]] = parse_config(config)
 
 
