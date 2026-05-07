@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import random
 from collections.abc import Sequence
 from typing import Any, cast
 
@@ -18,6 +19,15 @@ from .query import get_deck_rule
 DECK_UNSUSPEND_BATCH_SIZE = 1000
 DECK_UNSUSPEND_BATCH_PAUSE_MS = 500
 DECK_UNSUSPEND_TOOLTIP_PERIOD_MS = 1500
+
+
+def _get_variable_chunk_size(batch_size: int) -> int:
+    """Return a slightly randomized chunk size around the provided batch size."""
+
+    jitter = max(1, round(batch_size * 0.1))
+    lower_bound = max(1, batch_size - jitter)
+    upper_bound = batch_size + jitter
+    return random.randint(lower_bound, upper_bound)
 
 
 def suspend_cards(col: Collection, cards_to_suspend: Sequence[Card], note_id: NoteId) -> None:
@@ -135,15 +145,19 @@ def unsuspend_all_addon_cards_in_deck(col: Collection, deck_id: str) -> None:
         _finish_unsuspending()
         return
 
+    displayed_count = 0
+
     def _process_chunk(start_index: int = 0) -> None:
-        chunk = card_ids_to_unsuspend[start_index : start_index + DECK_UNSUSPEND_BATCH_SIZE]
+        nonlocal displayed_count
+        chunk_size = _get_variable_chunk_size(DECK_UNSUSPEND_BATCH_SIZE)
+        chunk = card_ids_to_unsuspend[start_index : start_index + chunk_size]
         if not chunk:
             _finish_unsuspending()
             return
 
         col.sched.unsuspend_cards(chunk)
-        processed_count = min(start_index + len(chunk), total_count)
-        _show_unsuspend_progress(processed_count)
+        displayed_count = min(total_count, displayed_count + len(chunk))
+        _show_unsuspend_progress(displayed_count)
 
         next_index = start_index + len(chunk)
         if next_index >= total_count:
