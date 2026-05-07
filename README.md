@@ -1,7 +1,7 @@
-# SibPush: Delay New Sibs
+# SibPush: Delay New Sibling Cards in Anki
 
 <center>
-    <img src="https://derdemystifier.github.io/SibPush_Delay-New-Sibs/images/illustration.jpg">
+    <img src="docs/images/illustration.png" alt="SibPush Illustration">
 </center>
 
 ## Overview
@@ -12,15 +12,6 @@ Meet SibPush, your Anki addon that likes to keep new sibling cards at a chill di
 
 So here’s the deal. Normally when you bump into a new card, Anki shoves its siblings to the side for just a day. Not cool, right? SibPush steps in to save the "spaced" in spaced repetition. It suspends the new siblings that should wait, marks them with the `SibPush_suspended` tag, and checks for recovery on the next deck browser render. Once the remaining siblings are mature enough, the suspended cards are unsuspended again. This way, you get to avoid cramming and actually remember stuff long-term. It’s all about keeping the learning groove going at a neat pace.
 
-Note: It's also compatible with V3 Scheduler.
-
-### When changes take effect
-
-- Deck browser renders are the central batch-processing entry point.
-- Review actions still process the reviewed note immediately.
-- Config saves and sync completion can queue work, but SibPush applies that queued work the next time the deck browser renders.
-- That keeps the processing path easier to debug: one main door for batch work, one note-scoped door for review.
-
 ## Configuration
 
 The configuration of SibPush is straightforward and can be tailored to meet your study needs. Here are the settings you can tweak in the config file:
@@ -30,6 +21,8 @@ The configuration of SibPush is straightforward and can be tailored to meet your
 -   `custom_deck_rules`: A list of deck-specific rules. Each rule uses the deck ID (`did`) as the stable identifier, while `name` is only there to make the config easier to read. Set `ignored` to `true` to exclude a deck from the SibPush mechanism. Use `interval` to override the maturity threshold for that specific deck.
 
     You can manage the current deck's SibPush rule from the deck browser's `SibPush` submenu instead of editing JSON by hand.
+
+    ![SibPush Configuration](docs/images/deck_options.png)
 
     When you ignore a deck, SibPush queues the cleanup work and applies it on the next deck browser render, so the browser remains the single batch-processing doorway.
 
@@ -42,15 +35,9 @@ The configuration of SibPush is straightforward and can be tailored to meet your
             "custom_deck_rules": [
                 {
                     "did": "1777739665453",
-                    "name": "Siblings",
+                    "name": "Country Capitals",
                     "ignored": false,
                     "interval": 18
-                },
-                {
-                    "did": "1777739665454",
-                    "name": "Big Deck",
-                    "ignored": true,
-                    "interval": 30
                 }
             ],
             "tag_rules": {
@@ -63,12 +50,10 @@ The configuration of SibPush is straightforward and can be tailored to meet your
 
 -   `debug`: Set to `true` if you are debugging. When `debug` is true, the addon will log more information to `log.txt` file, which can be helpful for troubleshooting.
 
-### Notes on addon-managed suspension
+### Notes
 
 -   When SibPush suspends cards, it adds the `SibPush_suspended` tag to the note.
--   On the next deck browser render, SibPush scans tagged notes and unsuspends the addon-managed cards whose remaining siblings are mature.
--   Config changes that affect suspension rules are queued for the next deck browser render, which keeps the unsuspend/scan flow in one place.
--   Cards suspended manually by you are not part of SibPush’s suspension lifecycle.
+-   Cards suspended manually by you are ignored and not managed by SibPush.
 
 ## Usage
 

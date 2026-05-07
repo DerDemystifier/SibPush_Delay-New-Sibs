@@ -27,9 +27,28 @@ last_sync_mod_ts: int | None = None
 
 # Deferred browser-render work that should be applied before the next batch scan runs.
 # These keys live inside ``sibpush_state.json``; changing them is a schema change.
+#
+# PENDING_UNSUSPEND_DECK_IDS_KEY:
+#   List of deck IDs (as strings) queued for unsuspend cleanup. When a deck is un-ignored,
+#   any cards previously suspended by the add-on are unsuspended before the next scan.
+#   This queue ensures that unsuspend operations are performed in the correct browser context.
 PENDING_UNSUSPEND_DECK_IDS_KEY = "pending_unsuspend_deck_ids"
+# PENDING_PROCESSING_RESET_KEY:
+#   Boolean flag. When True, signals that the next browser-driven scan should reset the
+#   processing state (i.e., clear the scan watermarks and force a full reprocessing of all notes).
+#   This is typically queued when config changes (like interval or tag rule edits) require
+#   a fresh scan to apply new rules.
 PENDING_PROCESSING_RESET_KEY = "pending_processing_state_reset"
+# PENDING_UNMANAGED_REFRESH_KEY:
+#   Boolean flag. When True, signals that after the next browser-driven scan, the add-on
+#   should run a lighter pass to revisit any new notes that are still unmanaged (i.e.,
+#   not yet tagged or processed by SibPush). This is usually queued after a sync event
+#   when new notes are added outside the browser context.
 PENDING_UNMANAGED_REFRESH_KEY = "pending_unmanaged_refresh"
+# PENDING_BROWSER_WORK_KEY:
+#   The top-level key in the state file under which all deferred browser work is stored.
+#   Its value is a dictionary containing the above keys. Changing this key or its structure
+#   is a schema change and must be coordinated with migration logic if needed.
 PENDING_BROWSER_WORK_KEY = "pending_browser_work"
 
 
@@ -313,9 +332,7 @@ def get_pending_browser_work() -> dict[str, Any]:
     """
 
     return {
-        PENDING_UNSUSPEND_DECK_IDS_KEY: list(
-            _pending_browser_work[PENDING_UNSUSPEND_DECK_IDS_KEY]
-        ),
+        PENDING_UNSUSPEND_DECK_IDS_KEY: list(_pending_browser_work[PENDING_UNSUSPEND_DECK_IDS_KEY]),
         PENDING_PROCESSING_RESET_KEY: bool(_pending_browser_work[PENDING_PROCESSING_RESET_KEY]),
         PENDING_UNMANAGED_REFRESH_KEY: bool(_pending_browser_work[PENDING_UNMANAGED_REFRESH_KEY]),
     }
@@ -395,7 +412,9 @@ def discard_pending_unsuspend_deck_id(deck_id: str) -> dict[str, Any]:
 
     pending_work = get_pending_browser_work()
     pending_deck_ids = pending_work[PENDING_UNSUSPEND_DECK_IDS_KEY]
-    filtered_deck_ids = [queued_id for queued_id in pending_deck_ids if queued_id != normalized_deck_id]
+    filtered_deck_ids = [
+        queued_id for queued_id in pending_deck_ids if queued_id != normalized_deck_id
+    ]
 
     if len(filtered_deck_ids) != len(pending_deck_ids):
         pending_work[PENDING_UNSUSPEND_DECK_IDS_KEY] = filtered_deck_ids
@@ -518,7 +537,9 @@ def _apply_state_payload(payload: dict[str, Any]) -> None:
 
     last_processed_mod_ts = _normalize_timestamp(payload.get("last_processed_mod_ts"))
     last_sync_mod_ts = _normalize_timestamp(payload.get("last_sync_mod_ts"))
-    sync_pending_browser_work(_normalize_pending_browser_work(payload.get(PENDING_BROWSER_WORK_KEY)))
+    sync_pending_browser_work(
+        _normalize_pending_browser_work(payload.get(PENDING_BROWSER_WORK_KEY))
+    )
     _persistent_state_loaded = True
 
 
