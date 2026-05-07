@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from importlib import import_module
 
-from anki.consts import QUEUE_TYPE_NEW, QUEUE_TYPE_REV, QUEUE_TYPE_SUSPENDED
+from anki.consts import QUEUE_TYPE_REV, QUEUE_TYPE_SUSPENDED
 
 from ..addon_utils import patched_addon_state
 from ..card_utils import assert_card_queues, set_review_card_state
@@ -35,6 +35,7 @@ def test_on_config_save_unsuspends_addon_cards_for_newly_ignored_deck() -> None:
         with patched_addon_state(col) as patched_addon:
             addon = patched_addon
             parser_module = import_module(f"{addon.__name__}.sibpush.config.parser")
+            state_module = import_module(f"{addon.__name__}.sibpush.state")
             active_rule = {
                 "did": str(deck_id),
                 "name": "Ignored deck cleanup note",
@@ -75,13 +76,19 @@ def test_on_config_save_unsuspends_addon_cards_for_newly_ignored_deck() -> None:
 
             parser_module.on_config_save(config_text, addon.__name__)
 
-        print(
-            "After the deck becomes ignored, the add-on should undo its own suspension work and restore the new cards."
-        )
-        print_collection_state(col, "After config save (newly ignored deck unsuspended)")
+            assert state_module.get_pending_browser_work() == {
+                "pending_unsuspend_deck_ids": [str(deck_id)],
+                "pending_processing_state_reset": False,
+                "pending_unmanaged_refresh": False,
+            }
 
-        assert_card_queues(col, cards, [QUEUE_TYPE_REV, QUEUE_TYPE_NEW, QUEUE_TYPE_NEW])
-        assert not col.get_note(note.id).has_tag(addon.SUSPENDED_BY_ADDON_TAG)
+        print(
+            "After the deck becomes ignored, the add-on should keep the cards suspended until the browser render consumes the queued cleanup."
+        )
+        print_collection_state(col, "After config save (cleanup queued, not yet run)")
+
+        assert_card_queues(col, cards, [QUEUE_TYPE_REV, QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_SUSPENDED])
+        assert col.get_note(note.id).has_tag(addon.SUSPENDED_BY_ADDON_TAG)
 
 
 if __name__ == "__main__":

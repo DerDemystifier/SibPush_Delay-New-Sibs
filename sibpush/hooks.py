@@ -6,15 +6,16 @@ The add-on uses several hooks to monitor and respond to user actions:
 1. collection_did_load: Initialize on startup and load persistent state
 2. browser_render: Run the timestamp-based browser scan
 3. reviewer_did_answer_card: Process one note after a review action
-4. sync_did_finish: Refresh unmanaged notes and persist the sync watermark
+4. sync_did_finish: Queue unmanaged-note refresh and persist the sync watermark
 5. addon_config_editor_will_update_json: Handle config changes
 6. addons_dialog_will_delete_addons: Clean shutdown
 
 The processing model now uses persisted timestamps instead of a day gate:
 - Browser renders scan modified notes since the older of the sync and processed watermarks.
+- Browser renders also drain deferred config/sync work before scanning.
 - Sync completion updates the sync watermark so browser scans can catch up with remote edits.
-- The lighter unmanaged-note pass still runs after sync to revisit fresh notes that have not yet
-    been tagged by the add-on.
+- The lighter unmanaged-note pass now runs from browser render after sync queues it, so fresh
+    notes still get revisited without making sync itself a batch-processing entry point.
 """
 
 from __future__ import annotations
@@ -33,15 +34,53 @@ from .config.parser import on_config_save
 from .logging_support import initialize_log_file
 from .processing.notes import process_modified_notes, process_new_unmanaged_notes, process_note
 from .state import (
+    consume_pending_browser_work,
     get_browser_scan_since_ts,
     get_mw,
     load_persistent_state,
+    queue_pending_browser_work,
+    reset_persistent_state,
     save_persistent_state,
     sync_last_sync_mod_ts,
 )
+from .processing.suspension import unsuspend_all_addon_cards_in_deck
 from .ui.deck_actions import add_deck_actions_to_options_menu
 
+_BROWSER_SCAN_DELAY_MS = 0
 _pending_browser_scan = False
+
+
+def _apply_pending_browser_work_before_scan(col: Collection, pending_browser_work: dict[str, Any]) -> None:
+    """Apply queued browser work that must happen before the modified-note scan.
+
+    Args:
+        col (anki.collection.Collection): The active collection for the browser session.
+        pending_browser_work (dict[str, Any]): The queued browser-work snapshot to consume.
+
+    Returns:
+        None: The queued pre-scan side effects are applied to the collection.
+    """
+
+    if pending_browser_work["pending_processing_state_reset"]:
+        reset_persistent_state(col)
+
+    for deck_id in pending_browser_work["pending_unsuspend_deck_ids"]:
+        unsuspend_all_addon_cards_in_deck(col, str(deck_id))
+
+
+def _apply_pending_browser_work_after_scan(col: Collection, pending_browser_work: dict[str, Any]) -> None:
+    """Apply queued browser work that should happen after the modified-note scan.
+
+    Args:
+        col (anki.collection.Collection): The active collection for the browser session.
+        pending_browser_work (dict[str, Any]): The queued browser-work snapshot to consume.
+
+    Returns:
+        None: The queued post-scan side effects are applied to the collection.
+    """
+
+    if pending_browser_work["pending_unmanaged_refresh"]:
+        process_new_unmanaged_notes(col)
 
 
 def collection_did_load(col: Collection) -> None:
@@ -62,9 +101,10 @@ def collection_did_load(col: Collection) -> None:
 def browser_render(browser: Any) -> None:
     """Process notes when the Deck Browser refreshes.
 
-    This entry point uses the persisted timestamp watermark instead of a day-based gate.
-    Each browser render schedules a timestamp-bounded scan, and the scan itself persists the new
-    processed watermark when it completes.
+    This entry point acts as the central batch dispatcher. It first applies any queued
+    browser-work side effects, then schedules the timestamp-bounded scan after a short delay.
+    The scan itself persists the new processed watermark when it completes, and any queued
+    unmanaged-note refresh is run after the modified-note pass.
 
     Args:
         browser (Any): The browser instance emitted by the hook.
@@ -84,13 +124,32 @@ def browser_render(browser: Any) -> None:
 
     _pending_browser_scan = True
 
+    col = browser.mw.col
+
     def _clear_pending_browser_scan() -> None:
         global _pending_browser_scan
         _pending_browser_scan = False
 
-    process_modified_notes(
-        browser.mw.col, get_browser_scan_since_ts(), on_complete=_clear_pending_browser_scan
-    )
+    def _run_browser_render() -> None:
+        pending_browser_work = consume_pending_browser_work()
+
+        # Consume the queue once so we do not replay config or sync work on the next render.
+        # Apply pre-scan work first so the modified-note query sees the latest ignore/reset state.
+        _apply_pending_browser_work_before_scan(col, pending_browser_work)
+
+        def _after_modified_scan() -> None:
+            try:
+                _apply_pending_browser_work_after_scan(col, pending_browser_work)
+            finally:
+                _clear_pending_browser_scan()
+
+        try:
+            process_modified_notes(col, get_browser_scan_since_ts(), on_complete=_after_modified_scan)
+        except Exception:
+            _clear_pending_browser_scan()
+            raise
+
+    cast(Any, QTimer).singleShot(_BROWSER_SCAN_DELAY_MS, _run_browser_render)
 
 
 def reviewer_did_answer_card(reviewer: Any, card: Card, ease: int) -> None:
@@ -112,14 +171,21 @@ def reviewer_did_answer_card(reviewer: Any, card: Card, ease: int) -> None:
 
 
 def sync_did_finish(*_args: Any) -> None:
-    """Process newly synced unmanaged notes and persist the sync watermark."""
+    """Queue unmanaged-note refresh and persist the sync watermark.
+
+    Returns:
+        None: Sync bookkeeping is updated immediately, but note processing is deferred to the
+        next browser render.
+    """
 
     current_mw = get_mw()
     if current_mw is None or not getattr(current_mw, "col", None):
         raise Exception("SibPush : Anki is not initialized properly")
 
-    process_new_unmanaged_notes(current_mw.col)
+    # Sync only records the new watermark and sets a follow-up flag; browser render performs
+    # the actual note processing later.
     sync_last_sync_mod_ts(int(time.time()))
+    queue_pending_browser_work(refresh_unmanaged_notes=True)
     save_persistent_state(current_mw.col)
 
 

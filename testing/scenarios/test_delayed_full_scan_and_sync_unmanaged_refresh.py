@@ -65,8 +65,8 @@ def test_sync_finish_processes_only_unmanaged_new_notes() -> None:
     """
     Scenario: Case when a sync finishes after the add-on already processed the collection once.
 
-    The sync hook should revisit only the newly introduced unmanaged note, not the already tagged
-    note that was processed during the initial full pass.
+    The sync hook should queue unmanaged-note refresh work for the next browser render instead of
+    processing notes immediately.
     """
 
     with temporary_collection() as col:
@@ -82,6 +82,8 @@ def test_sync_finish_processes_only_unmanaged_new_notes() -> None:
         with patched_addon_state(col) as patched_addon:
             addon = patched_addon
             hooks_module = import_module(f"{addon.__name__}.sibpush.hooks")
+            state_module = import_module(f"{addon.__name__}.sibpush.state")
+            browser = SimpleNamespace(mw=SimpleNamespace(col=col))
 
             patched_addon.process_all_notes(col)
 
@@ -93,10 +95,29 @@ def test_sync_finish_processes_only_unmanaged_new_notes() -> None:
             )
             assert col.get_note(managed_note.id).has_tag(addon.SUSPENDED_BY_ADDON_TAG)
 
-            assert_card_queues(col, new_cards, [QUEUE_TYPE_NEW, QUEUE_TYPE_NEW, QUEUE_TYPE_NEW])
-            assert not col.get_note(new_note.id).has_tag(addon.SUSPENDED_BY_ADDON_TAG)
+            assert_card_queues(
+                col, new_cards, [QUEUE_TYPE_NEW, QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_SUSPENDED]
+            )
+            assert col.get_note(new_note.id).has_tag(addon.SUSPENDED_BY_ADDON_TAG)
 
             hooks_module.sync_did_finish()
+
+            assert state_module.get_pending_browser_work() == {
+                "pending_unsuspend_deck_ids": [],
+                "pending_processing_state_reset": False,
+                "pending_unmanaged_refresh": True,
+            }
+
+            assert_card_queues(
+                col, managed_cards, [QUEUE_TYPE_NEW, QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_SUSPENDED]
+            )
+            assert col.get_note(managed_note.id).has_tag(addon.SUSPENDED_BY_ADDON_TAG)
+            assert_card_queues(
+                col, new_cards, [QUEUE_TYPE_NEW, QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_SUSPENDED]
+            )
+            assert col.get_note(new_note.id).has_tag(addon.SUSPENDED_BY_ADDON_TAG)
+
+            hooks_module.browser_render(browser)
 
         print("After sync finishes, only the newly introduced unmanaged note should be processed.")
         print_collection_state(col, "After sync unmanaged refresh")
@@ -105,7 +126,9 @@ def test_sync_finish_processes_only_unmanaged_new_notes() -> None:
             col, managed_cards, [QUEUE_TYPE_NEW, QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_SUSPENDED]
         )
         assert col.get_note(managed_note.id).has_tag(addon.SUSPENDED_BY_ADDON_TAG)
-        assert_card_queues(col, new_cards, [QUEUE_TYPE_NEW, QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_SUSPENDED])
+        assert_card_queues(
+            col, new_cards, [QUEUE_TYPE_NEW, QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_SUSPENDED]
+        )
         assert col.get_note(new_note.id).has_tag(addon.SUSPENDED_BY_ADDON_TAG)
 
 

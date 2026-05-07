@@ -9,7 +9,12 @@ from typing import Any, cast
 from aqt import mw
 
 from ..logging_support import initialize_log_file, logThis
-from ..state import get_mw, reset_persistent_state
+from ..state import (
+    discard_pending_unsuspend_deck_id,
+    get_mw,
+    queue_pending_browser_work,
+    save_persistent_state,
+)
 
 # Module-level state that caches parsed configuration data.
 # These values are derived from the raw config, kept in sync by parse_config(),
@@ -198,7 +203,7 @@ def _extract_custom_deck_rule_effects(config_settings: dict[str, Any]) -> dict[s
 def _should_invalidate_processing_state(
     previous_config_settings: dict[str, Any], current_config_settings: dict[str, Any]
 ) -> bool:
-    """Return True when a config change should force a fresh timestamp scan.
+    """Return True when a config change should queue a fresh timestamp scan.
 
     The state is reset for changes that can alter SibPush's processing decisions:
     - default interval changes
@@ -206,7 +211,7 @@ def _should_invalidate_processing_state(
     - deck unignore changes
     - deck interval changes
 
-    Ignoring a deck is intentionally excluded because that path already unsuspends the cards.
+    Ignoring a deck is intentionally excluded because that path only queues deck cleanup.
     """
 
     previous_default_interval = _parse_int(previous_config_settings.get("default_interval", 21), 21)
@@ -237,6 +242,15 @@ def _should_invalidate_processing_state(
             return True
 
     return False
+
+
+def _get_newly_unignored_deck_ids(
+    previous_ignored_deck_ids: list[str], current_ignored_deck_ids: list[str]
+) -> list[str]:
+    """Return deck ids that were just switched from ignored to managed."""
+
+    current_ids = set(current_ignored_deck_ids)
+    return [deck_id for deck_id in previous_ignored_deck_ids if deck_id and deck_id not in current_ids]
 
 
 def get_custom_deck_rule(deck_id: str) -> dict[str, Any] | None:
@@ -303,7 +317,7 @@ def _prepare_custom_deck_rule(
     default_interval = _parse_int(config.get("default_interval", 21), 21)
     custom_deck_rules = cast(list[dict[str, Any]], config.setdefault("custom_deck_rules", []))
 
-    rule = next(
+    rule: dict[str, Any] | None = next(
         (
             existing_rule
             for existing_rule in custom_deck_rules
@@ -333,8 +347,8 @@ def refresh_config_state(config: dict[str, Any]) -> dict[str, Any]:
     """Parse a config object and refresh the in-memory runtime state.
 
     This function updates the global config_settings dictionary with parsed values
-    from the provided config. It also handles unsuspending cards in decks that have
-    been newly marked as ignored.
+    from the provided config. It also records any deferred browser-render work that
+    should happen before the next batch scan.
 
     Args:
         config (dict[str, Any]): The raw configuration dictionary to parse.
@@ -348,9 +362,26 @@ def refresh_config_state(config: dict[str, Any]) -> dict[str, Any]:
     previous_ignored_deck_ids = list(ignored_deck_ids)
     config_settings.clear()
     config_settings.update(parse_config(config))
+
+    newly_ignored_deck_ids = _get_newly_ignored_deck_ids(previous_ignored_deck_ids, ignored_deck_ids)
+    if newly_ignored_deck_ids:
+        queue_pending_browser_work(deck_ids=newly_ignored_deck_ids)
+
+    newly_unignored_deck_ids = _get_newly_unignored_deck_ids(
+        previous_ignored_deck_ids, ignored_deck_ids
+    )
+    if newly_unignored_deck_ids:
+        for deck_id in newly_unignored_deck_ids:
+            discard_pending_unsuspend_deck_id(deck_id)
+
     if _should_invalidate_processing_state(previous_config_settings, config_settings):
-        reset_persistent_state()
-    _unsuspend_cards_for_newly_ignored_decks(previous_ignored_deck_ids)
+        queue_pending_browser_work(reset_processing_state=True)
+
+    current_mw = get_mw()
+    col = getattr(current_mw, "col", None) if current_mw is not None else None
+    if col is not None:
+        save_persistent_state(col)
+
     return config_settings
 
 
@@ -438,38 +469,6 @@ def _get_newly_ignored_deck_ids(
     return [
         deck_id for deck_id in current_ignored_deck_ids if deck_id and deck_id not in previous_ids
     ]
-
-
-def _unsuspend_cards_for_newly_ignored_decks(previous_ignored_deck_ids: list[str]) -> None:
-    """Undo the add-on's suspension for decks that just became ignored.
-
-    When a deck is marked as ignored, cards that were suspended by the add-on
-    should be unsuspended since the add-on will no longer manage them.
-
-    Args:
-        previous_ignored_deck_ids (list[str]): The ignored deck ids before the config save.
-
-    Returns:
-        None: Cards are unsuspended as a side effect.
-    """
-
-    newly_ignored_deck_ids = _get_newly_ignored_deck_ids(
-        previous_ignored_deck_ids, ignored_deck_ids
-    )
-    if not newly_ignored_deck_ids:
-        return
-
-    current_mw = get_mw()
-    col = getattr(current_mw, "col", None) if current_mw is not None else None
-    if col is None:
-        return
-
-    from ..processing.suspension import unsuspend_all_addon_cards_in_deck
-
-    for deck_id in newly_ignored_deck_ids:
-        # Once a deck becomes ignored, the add-on stops managing it, so restore any
-        # cards it had suspended before leaving the deck alone from that point on.
-        unsuspend_all_addon_cards_in_deck(col, deck_id)
 
 
 def _parse_tag_rules(config: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
