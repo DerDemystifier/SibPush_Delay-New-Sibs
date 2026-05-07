@@ -147,33 +147,6 @@ def _save_profile_config(config: dict[str, Any], col: Any | None = None) -> None
     _write_profile_config_file(config_file, config)
 
 
-def _load_initial_config() -> dict[str, Any] | None:
-    """Load the best available config snapshot at module import time.
-
-    Only the profile-local file is considered for runtime configuration. The add-on-manager
-    config is reserved for editor interaction and must not drive SibPush behavior.
-
-    Returns:
-        dict[str, Any] | None: The initial config snapshot, or None when no config exists yet.
-    """
-
-    return _load_profile_config()
-
-
-def _load_config_snapshot(col: Any | None = None) -> dict[str, Any] | None:
-    """Load the best available config snapshot for a given collection.
-
-    Args:
-        col (Any | None): The collection used to resolve the profile-local config file.
-
-    Returns:
-        dict[str, Any] | None: The profile-local config when it exists, or None when nothing is
-            available.
-    """
-
-    return _load_profile_config(col)
-
-
 def _parse_int(value: Any, default: int) -> int:
     """Convert a value to an integer, falling back to a default when needed.
 
@@ -474,12 +447,12 @@ def _prepare_custom_deck_rule(
     return rule
 
 
-def refresh_config_state(config: dict[str, Any]) -> dict[str, Any]:
+def _apply_config_state(config: dict[str, Any]) -> dict[str, Any]:
     """Parse a config object and refresh the in-memory runtime state.
 
-    This function updates the global config_settings dictionary with parsed values
-    from the provided config. It also records any deferred browser-render work that
-    should happen before the next batch scan.
+    This helper only updates the cached runtime config and persists the timestamp state file.
+    It does not queue any deferred browser work, which keeps collection startup from being treated
+    like an explicit config edit.
 
     Args:
         config (dict[str, Any]): The raw configuration dictionary to parse.
@@ -488,11 +461,24 @@ def refresh_config_state(config: dict[str, Any]) -> dict[str, Any]:
         dict[str, Any]: The refreshed config_settings dictionary.
     """
 
+    config_settings.clear()
+    config_settings.update(parse_config(config))
+
+    current_mw = get_mw()
+    col = getattr(current_mw, "col", None) if current_mw is not None else None
+    if col is not None:
+        save_persistent_state(col)
+
+    return config_settings
+
+
+def refresh_config_state(config: dict[str, Any]) -> dict[str, Any]:
+    """Refresh runtime config and queue any deferred work caused by a real config change."""
+
     previous_config_settings = deepcopy(config_settings)
     # Capture the old ignored-deck list before parse_config() mutates the shared caches.
     previous_ignored_deck_ids = list(ignored_deck_ids)
-    config_settings.clear()
-    config_settings.update(parse_config(config))
+    refreshed_settings = _apply_config_state(config)
 
     newly_ignored_deck_ids = _get_newly_ignored_deck_ids(
         previous_ignored_deck_ids, ignored_deck_ids
@@ -507,7 +493,7 @@ def refresh_config_state(config: dict[str, Any]) -> dict[str, Any]:
         for deck_id in newly_unignored_deck_ids:
             discard_pending_unsuspend_deck_id(deck_id)
 
-    if _should_invalidate_processing_state(previous_config_settings, config_settings):
+    if _should_invalidate_processing_state(previous_config_settings, refreshed_settings):
         queue_pending_browser_work(reset_processing_state=True)
 
     current_mw = get_mw()
@@ -515,7 +501,7 @@ def refresh_config_state(config: dict[str, Any]) -> dict[str, Any]:
     if col is not None:
         save_persistent_state(col)
 
-    return config_settings
+    return refreshed_settings
 
 
 def load_config_state(col: Any | None = None) -> dict[str, Any]:
@@ -528,8 +514,8 @@ def load_config_state(col: Any | None = None) -> dict[str, Any]:
         dict[str, Any]: The refreshed config_settings dictionary.
     """
 
-    config = _load_config_snapshot(col)
-    return refresh_config_state(config or {})
+    config = _load_profile_config(col)
+    return _apply_config_state(config or {})
 
 
 def save_config_state(config: dict[str, Any]) -> dict[str, Any]:
@@ -671,8 +657,8 @@ def parse_config(
 # Initialize the add-on configuration at module load time.
 # This happens when Anki loads the add-on, ensuring config is available immediately.
 addon_manager: Any | None = getattr(mw, "addonManager", None) if mw else None
-config: dict[str, Any] | None = _load_initial_config()
-config_settings: dict[str, bool | int | list[dict[str, Any]]] = parse_config(config)
+config: dict[str, Any] | None = None
+config_settings: dict[str, bool | int | list[dict[str, Any]]] = parse_config(None)
 
 
 def on_config_display(config_text: str) -> str:

@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import json
 from importlib import import_module
+from types import SimpleNamespace
+
+from unittest.mock import patch
 
 from ..addon_utils import FakeAddonManager, patched_addon_state
 from ..collection_utils import temporary_collection
@@ -208,6 +211,86 @@ def test_collection_load_does_not_fall_back_to_meta_config() -> None:
             assert state_module.get_config_file_path(col) is not None
             assert not state_module.get_config_file_path(col).exists()
             assert fake_manager.config == meta_config
+
+
+def test_collection_load_does_not_queue_a_startup_reset_from_profile_config() -> None:
+    """Loading the profile config at startup should not invalidate the saved scan watermark."""
+
+    profile_config = {
+        "default_interval": 33,
+        "custom_deck_rules": [],
+        "tag_rules": {"topic": {"interval": 0}},
+        "debug": False,
+    }
+
+    with temporary_collection() as col:
+        fake_manager = FakeAddonManager(
+            {
+                "default_interval": 21,
+                "custom_deck_rules": [],
+                "tag_rules": {},
+                "debug": False,
+            }
+        )
+
+        with patched_addon_state(col, addon_manager=fake_manager) as patched_addon:
+            addon = patched_addon
+            hooks_module = import_module(f"{addon.__name__}.sibpush.hooks")
+            state_module = import_module(f"{addon.__name__}.sibpush.state")
+            config_file = state_module.get_config_file_path(col)
+            state_file = state_module.get_state_file_path(col)
+
+            assert config_file is not None
+            assert state_file is not None
+
+            config_file.write_text(json.dumps(profile_config), encoding="utf-8")
+            state_module.sync_last_processed_mod_ts(123)
+            state_module.sync_last_sync_mod_ts(456)
+            state_module.save_persistent_state(col)
+
+            browser = SimpleNamespace(mw=SimpleNamespace(col=col))
+            scheduled: dict[str, object] = {}
+            captured: dict[str, object] = {}
+
+            def fake_single_shot(delay_ms: int, callback: object) -> None:
+                scheduled["delay_ms"] = delay_ms
+                scheduled["callback"] = callback
+
+            def fake_process_modified_notes(
+                col_arg: object,
+                modified_since: int,
+                on_complete: object | None = None,
+                on_success: object | None = None,
+            ) -> None:
+                captured["col"] = col_arg
+                captured["modified_since"] = modified_since
+                if callable(on_success):
+                    on_success()
+                if callable(on_complete):
+                    on_complete()
+
+            with patch.object(hooks_module.QTimer, "singleShot", side_effect=fake_single_shot), patch.object(
+                hooks_module, "process_modified_notes", side_effect=fake_process_modified_notes
+            ):
+                hooks_module.collection_did_load(col)
+                hooks_module.browser_render(browser)
+
+                assert scheduled["delay_ms"] == 2000
+                assert callable(scheduled["callback"])
+
+                scheduled["callback"]()
+
+            assert captured["col"] is col
+            assert captured["modified_since"] == 123
+            assert json.loads(state_file.read_text(encoding="utf-8")) == {
+                "last_processed_mod_ts": 123,
+                "last_sync_mod_ts": 456,
+            }
+            assert state_module.get_pending_browser_work() == {
+                "pending_unsuspend_deck_ids": [],
+                "pending_processing_state_reset": False,
+                "pending_unmanaged_refresh": False,
+            }
 
 
 if __name__ == "__main__":
