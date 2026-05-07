@@ -307,6 +307,7 @@ def _run_modified_note_chunked_scan(
     def _finish_scan() -> None:
         _show_modified_note_progress(total_count, total_count)
         _persist_processed_mod_timestamp(col, scan_started_at)
+        show_processing_finished_tooltip()
         try:
             if on_success is not None:
                 on_success()
