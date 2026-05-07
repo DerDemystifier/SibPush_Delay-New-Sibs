@@ -150,23 +150,28 @@ def _save_profile_config(config: dict[str, Any], col: Any | None = None) -> None
 def _load_initial_config() -> dict[str, Any] | None:
     """Load the best available config snapshot at module import time.
 
-    The profile-local file wins when it exists; otherwise we fall back to the current add-on
-    manager config so first-run migrations still have something to work with.
+    Only the profile-local file is considered for runtime configuration. The add-on-manager
+    config is reserved for editor interaction and must not drive SibPush behavior.
 
     Returns:
         dict[str, Any] | None: The initial config snapshot, or None when no config exists yet.
     """
 
-    profile_config = _load_profile_config()
-    if profile_config is not None:
-        return profile_config
+    return _load_profile_config()
 
-    addon_manager = _get_addon_manager()
-    if addon_manager is None:
-        return None
 
-    config_value = addon_manager.getConfig(_addon_module_name())
-    return cast(dict[str, Any], config_value) if isinstance(config_value, dict) else None
+def _load_config_snapshot(col: Any | None = None) -> dict[str, Any] | None:
+    """Load the best available config snapshot for a given collection.
+
+    Args:
+        col (Any | None): The collection used to resolve the profile-local config file.
+
+    Returns:
+        dict[str, Any] | None: The profile-local config when it exists, or None when nothing is
+            available.
+    """
+
+    return _load_profile_config(col)
 
 
 def _parse_int(value: Any, default: int) -> int:
@@ -293,7 +298,9 @@ def _index_custom_deck_rules(custom_deck_rules: list[dict[str, Any]]) -> dict[st
     }
 
 
-def _extract_custom_deck_rule_effects(config_settings: dict[str, Any]) -> dict[str, tuple[bool, int]]:
+def _extract_custom_deck_rule_effects(
+    config_settings: dict[str, Any],
+) -> dict[str, tuple[bool, int]]:
     """Return the effective ignore/interval state for each explicitly configured deck."""
 
     default_interval = _parse_int(config_settings.get("default_interval", 21), 21)
@@ -339,7 +346,9 @@ def _should_invalidate_processing_state(
     if previous_default_interval != current_default_interval:
         return True
 
-    if previous_config_settings.get("tag_rules", {}) != current_config_settings.get("tag_rules", {}):
+    if previous_config_settings.get("tag_rules", {}) != current_config_settings.get(
+        "tag_rules", {}
+    ):
         return True
 
     previous_deck_effects = _extract_custom_deck_rule_effects(previous_config_settings)
@@ -370,7 +379,9 @@ def _get_newly_unignored_deck_ids(
     """Return deck ids that were just switched from ignored to managed."""
 
     current_ids = set(current_ignored_deck_ids)
-    return [deck_id for deck_id in previous_ignored_deck_ids if deck_id and deck_id not in current_ids]
+    return [
+        deck_id for deck_id in previous_ignored_deck_ids if deck_id and deck_id not in current_ids
+    ]
 
 
 def get_custom_deck_rule(deck_id: str) -> dict[str, Any] | None:
@@ -483,7 +494,9 @@ def refresh_config_state(config: dict[str, Any]) -> dict[str, Any]:
     config_settings.clear()
     config_settings.update(parse_config(config))
 
-    newly_ignored_deck_ids = _get_newly_ignored_deck_ids(previous_ignored_deck_ids, ignored_deck_ids)
+    newly_ignored_deck_ids = _get_newly_ignored_deck_ids(
+        previous_ignored_deck_ids, ignored_deck_ids
+    )
     if newly_ignored_deck_ids:
         queue_pending_browser_work(deck_ids=newly_ignored_deck_ids)
 
@@ -503,6 +516,20 @@ def refresh_config_state(config: dict[str, Any]) -> dict[str, Any]:
         save_persistent_state(col)
 
     return config_settings
+
+
+def load_config_state(col: Any | None = None) -> dict[str, Any]:
+    """Load the active config snapshot for the current collection and refresh runtime state.
+
+    Args:
+        col (Any | None): The collection used to resolve the profile-local config file.
+
+    Returns:
+        dict[str, Any]: The refreshed config_settings dictionary.
+    """
+
+    config = _load_config_snapshot(col)
+    return refresh_config_state(config or {})
 
 
 def save_config_state(config: dict[str, Any]) -> dict[str, Any]:

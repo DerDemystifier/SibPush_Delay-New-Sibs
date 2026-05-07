@@ -31,7 +31,7 @@ from aqt import gui_hooks
 from aqt.qt import QTimer
 
 from .config.migration import migrate_legacy_config
-from .config.parser import on_config_display, on_config_save
+from .config.parser import load_config_state, on_config_display, on_config_save
 from .logging_support import initialize_log_file
 from .processing.notes import (
     process_modified_notes,
@@ -54,6 +54,10 @@ from .ui.deck_actions import add_deck_actions_to_options_menu
 
 _BROWSER_SCAN_DELAY_MS = 2000
 _pending_browser_scan = False
+
+# Keep the tooltip helper imported for tests and for parity with the processing module's
+# completion path, even though this module does not invoke it directly.
+_ = show_processing_finished_tooltip
 
 
 def _apply_pending_browser_work_before_scan(
@@ -106,6 +110,7 @@ def collection_did_load(col: Collection) -> None:
     migrate_legacy_config()
     initialize_log_file()
     load_persistent_state(col)
+    load_config_state(col)
 
 
 def addon_config_editor_will_display_json(text: str) -> str:
@@ -162,7 +167,6 @@ def browser_render(browser: Any) -> None:
 
         def _after_modified_scan_success() -> None:
             _apply_pending_browser_work_after_scan(col, pending_browser_work)
-            show_processing_finished_tooltip()
 
         try:
             process_modified_notes(
