@@ -171,3 +171,38 @@ def unsuspend_all_addon_cards_in_deck(col: Collection, deck_id: str) -> None:
 
     _show_unsuspend_progress(0)
     cast(Any, QTimer).singleShot(0, _process_chunk)
+
+
+def unsuspend_all_addon_cards(col: Collection) -> None:
+    """Unsuspend all add-on-managed cards across every deck.
+
+    Args:
+        col (anki.collection.Collection): The collection that owns the cards.
+
+    Returns:
+        None: The matching cards are restored immediately for their side effects.
+    """
+
+    card_ids_to_unsuspend: list[CardId] = []
+    notes_to_prune: dict[int, Note] = {}
+
+    for card_id in col.find_cards(f"tag:{SUSPENDED_BY_ADDON_TAG} is:suspended"):
+        card = col.get_card(card_id)
+        if card.queue != QUEUE_TYPE_SUSPENDED:
+            continue
+
+        note = card.note()
+        card_ids_to_unsuspend.append(card.id)
+        notes_to_prune[note.id] = note
+
+    if not card_ids_to_unsuspend:
+        return
+
+    for start_index in range(0, len(card_ids_to_unsuspend), DECK_UNSUSPEND_BATCH_SIZE):
+        col.sched.unsuspend_cards(
+            card_ids_to_unsuspend[start_index : start_index + DECK_UNSUSPEND_BATCH_SIZE]
+        )
+
+    for note in notes_to_prune.values():
+        note.remove_tag(SUSPENDED_BY_ADDON_TAG)
+        col.update_note(note)
