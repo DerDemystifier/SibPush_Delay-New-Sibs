@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+import random
 from collections.abc import Callable, Sequence
 from datetime import date
 from typing import Any, cast
@@ -41,6 +42,15 @@ from .suspension import (
 MODIFIED_NOTE_BATCH_SIZE = 1000
 MODIFIED_NOTE_BATCH_PAUSE_MS = 500
 MODIFIED_NOTE_TOOLTIP_PERIOD_MS = 1500
+
+
+def _get_variable_chunk_size(batch_size: int) -> int:
+    """Return a slightly randomized chunk size around the provided batch size."""
+
+    jitter = max(1, round(batch_size * 0.1))
+    lower_bound = max(1, batch_size - jitter)
+    upper_bound = batch_size + jitter
+    return random.randint(lower_bound, upper_bound)
 
 
 def process_note(
@@ -281,6 +291,7 @@ def _run_modified_note_chunked_scan(
         return
 
     total_count = len(note_ids)
+    displayed_count = 0
 
     def _finish_scan() -> None:
         _show_modified_note_progress(total_count, total_count)
@@ -289,15 +300,17 @@ def _run_modified_note_chunked_scan(
             on_complete()
 
     def _process_chunk(start_index: int = 0) -> None:
+        nonlocal displayed_count
         try:
-            chunk = note_ids[start_index : start_index + MODIFIED_NOTE_BATCH_SIZE]
+            chunk_size = _get_variable_chunk_size(MODIFIED_NOTE_BATCH_SIZE)
+            chunk = note_ids[start_index : start_index + chunk_size]
             if not chunk:
                 _finish_scan()
                 return
 
             _process_note_batch(col, chunk)
-            processed_count = min(start_index + len(chunk), total_count)
-            _show_modified_note_progress(processed_count, total_count)
+            displayed_count = min(total_count, displayed_count + len(chunk))
+            _show_modified_note_progress(displayed_count, total_count)
 
             next_index = start_index + len(chunk)
             if next_index >= len(note_ids):
