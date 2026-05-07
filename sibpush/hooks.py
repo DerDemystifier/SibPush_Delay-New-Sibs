@@ -1,26 +1,26 @@
 """Anki hook callbacks for the SibPush add-on.
 
-This module registers all the Anki hooks that trigger SibPush's sibling management.
-The addon uses several hooks to monitor and respond to user actions:
+This module registers the Anki hooks that drive SibPush's sibling management.
+The add-on uses several hooks to monitor and respond to user actions:
 
-1. collection_did_load: Initialize on startup
-2. browser_render: Main processing trigger (scans notes when deck browser opens)
-3. reviewer_did_answer_card: Process note after user reviews a card
-4. sync_did_finish: Process newly synced cards
+1. collection_did_load: Initialize on startup and load persistent state
+2. browser_render: Run the timestamp-based browser scan
+3. reviewer_did_answer_card: Process one note after a review action
+4. sync_did_finish: Refresh unmanaged notes and persist the sync watermark
 5. addon_config_editor_will_update_json: Handle config changes
 6. addons_dialog_will_delete_addons: Clean shutdown
 
-The key insight is that SibPush runs in two modes:
-- Full scan (once per day): Processes all notes with the addon tag
-- Incremental scan (after sync/browser refresh): Only processes new unmanaged notes
-
-This two-tier approach balances thoroughness with performance.
+The processing model now uses persisted timestamps instead of a day gate:
+- Browser renders scan modified notes since the older of the sync and processed watermarks.
+- Sync completion updates the sync watermark so browser scans can catch up with remote edits.
+- The lighter unmanaged-note pass still runs after sync to revisit fresh notes that have not yet
+    been tagged by the add-on.
 """
 
 from __future__ import annotations
 
 import logging
-from datetime import date
+import time
 from typing import Any, cast
 
 from anki.cards import Card
@@ -31,11 +31,17 @@ from aqt.qt import QTimer
 from .config.migration import migrate_legacy_config
 from .config.parser import on_config_save
 from .logging_support import initialize_log_file
-from .processing.notes import process_all_notes, process_new_unmanaged_notes, process_note
-from .state import get_last_full_scan_date, get_mw
+from .processing.notes import process_modified_notes, process_new_unmanaged_notes, process_note
+from .state import (
+    get_browser_scan_since_ts,
+    get_mw,
+    load_persistent_state,
+    save_persistent_state,
+    sync_last_sync_mod_ts,
+)
 from .ui.deck_actions import add_deck_actions_to_options_menu
 
-_pending_full_scan = False
+_pending_browser_scan = False
 
 
 def collection_did_load(col: Collection) -> None:
@@ -50,26 +56,15 @@ def collection_did_load(col: Collection) -> None:
 
     migrate_legacy_config()
     initialize_log_file()
+    load_persistent_state(col)
 
 
 def browser_render(browser: Any) -> None:
     """Process notes when the Deck Browser refreshes.
 
-    This is the main entry point for SibPush's processing logic. It runs in two modes:
-
-    MODE 1 - Full Scan (once per day):
-    - Triggered on the first browser render each day
-    - Processes ALL notes with new cards (excluding ignored decks)
-    - Updates the last_full_scan_date to today
-    - Uses a 2-second delay to avoid blocking the UI thread
-
-    MODE 2 - Incremental Scan (subsequent renders same day):
-    - Triggered on subsequent browser renders after the daily full scan
-    - Only processes new notes that don't have the SibPush_suspended tag
-    - Much faster since it skips already-managed notes
-
-    The _pending_full_scan flag prevents duplicate full scans if the browser
-    renders multiple times before the delayed scan completes.
+    This entry point uses the persisted timestamp watermark instead of a day-based gate.
+    Each browser render schedules a timestamp-bounded scan, and the scan itself persists the new
+    processed watermark when it completes.
 
     Args:
         browser (Any): The browser instance emitted by the hook.
@@ -81,40 +76,21 @@ def browser_render(browser: Any) -> None:
     if not browser or not browser.mw.col:
         raise Exception("SibPush : Anki is not initialized properly")
 
-    global _pending_full_scan
+    global _pending_browser_scan
 
-    # Check if we need to run a full scan today
-    current_full_scan_date = get_last_full_scan_date()
-    today = date.today().isoformat()
-
-    if current_full_scan_date is None or current_full_scan_date != today:
-        # MODE 1: Full scan needed (first render of the day or never scanned)
-
-        if _pending_full_scan:
-            # A full scan is already scheduled - don't schedule another
-            return
-
-        _pending_full_scan = True
-
-        def _run_full_scan(col: Collection = browser.mw.col) -> None:
-            """Execute the full scan in a delayed callback.
-
-            The delay prevents blocking Anki's UI during startup.
-            The try/finally ensures _pending_full_scan is always reset.
-            """
-            global _pending_full_scan
-            try:
-                process_all_notes(col)
-            finally:
-                _pending_full_scan = False
-
-        # Schedule the full scan with a 2-second delay to let Anki finish loading
-        cast(Any, QTimer).singleShot(2000, _run_full_scan)
+    if _pending_browser_scan:
+        # A browser scan is already scheduled - don't queue another one.
         return
 
-    # MODE 2: Incremental scan (same day, after full scan completed)
-    # Only process notes that are new and don't have the addon tag yet
-    process_new_unmanaged_notes(browser.mw.col)
+    _pending_browser_scan = True
+
+    def _clear_pending_browser_scan() -> None:
+        global _pending_browser_scan
+        _pending_browser_scan = False
+
+    process_modified_notes(
+        browser.mw.col, get_browser_scan_since_ts(), on_complete=_clear_pending_browser_scan
+    )
 
 
 def reviewer_did_answer_card(reviewer: Any, card: Card, ease: int) -> None:
@@ -136,13 +112,15 @@ def reviewer_did_answer_card(reviewer: Any, card: Card, ease: int) -> None:
 
 
 def sync_did_finish(*_args: Any) -> None:
-    """Process newly synced unmanaged notes after a successful sync."""
+    """Process newly synced unmanaged notes and persist the sync watermark."""
 
     current_mw = get_mw()
     if current_mw is None or not getattr(current_mw, "col", None):
         raise Exception("SibPush : Anki is not initialized properly")
 
     process_new_unmanaged_notes(current_mw.col)
+    sync_last_sync_mod_ts(int(time.time()))
+    save_persistent_state(current_mw.col)
 
 
 def on_addon_delete(dialog: Any, ids: list[str]) -> None:
@@ -167,10 +145,16 @@ def register_hooks() -> None:
     """
 
     hooks = cast(Any, gui_hooks)
+
+    # Startup hooks.
     hooks.collection_did_load.append(collection_did_load)
+
+    # Main processing hooks.
     hooks.deck_browser_did_render.append(browser_render)
-    hooks.deck_browser_will_show_options_menu.append(add_deck_actions_to_options_menu)
     hooks.reviewer_did_answer_card.append(reviewer_did_answer_card)
     hooks.sync_did_finish.append(sync_did_finish)
+
+    # UI/config hooks.
+    hooks.deck_browser_will_show_options_menu.append(add_deck_actions_to_options_menu)
     hooks.addon_config_editor_will_update_json.append(on_config_save)
     hooks.addons_dialog_will_delete_addons.append(on_addon_delete)

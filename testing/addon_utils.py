@@ -29,6 +29,8 @@ class AddonModule(Protocol):
     mw: Any
     last_full_scan_date: str | None
     last_unmanaged_note_ids: Sequence["NoteId"] | None
+    last_processed_mod_ts: int | None
+    last_sync_mod_ts: int | None
     config_settings: dict[str, object]
     custom_deck_rules_by_did: dict[str, dict[str, object]]
     ignored_deck_ids: list[str]
@@ -38,6 +40,22 @@ class AddonModule(Protocol):
     def process_new_unmanaged_notes(self, col: "Collection") -> None: ...
 
     def process_note(self, col: "Collection", note_id: int, coming_from_reviewer_hook: bool = False) -> None: ...
+
+    def get_state_file_path(self, col: "Collection" | None = None) -> Any: ...
+
+    def load_persistent_state(self, col: "Collection" | None = None) -> dict[str, int | None]: ...
+
+    def save_persistent_state(self, col: "Collection" | None = None) -> dict[str, int | None]: ...
+
+    def reset_persistent_state(self, col: "Collection" | None = None) -> dict[str, int | None]: ...
+
+    def get_last_processed_mod_ts(self) -> int: ...
+
+    def sync_last_processed_mod_ts(self, value: int | None) -> None: ...
+
+    def get_last_sync_mod_ts(self) -> int | None: ...
+
+    def sync_last_sync_mod_ts(self, value: int | None) -> None: ...
 
     SUSPENDED_BY_ADDON_TAG: str
 
@@ -137,16 +155,28 @@ def patched_addon_state(
     addon.mw = state_module.mw
     addon.last_full_scan_date = state_module.last_full_scan_date
     addon.last_unmanaged_note_ids = state_module.last_unmanaged_note_ids
+    addon.last_processed_mod_ts = state_module.last_processed_mod_ts
+    addon.last_sync_mod_ts = state_module.last_sync_mod_ts
     addon.config_settings = parser_module.config_settings
     addon.custom_deck_rules_by_did = parser_module.custom_deck_rules_by_did
     addon.ignored_deck_ids = parser_module.ignored_deck_ids
     addon.process_all_notes = notes_module.process_all_notes
     addon.process_new_unmanaged_notes = notes_module.process_new_unmanaged_notes
     addon.process_note = notes_module.process_note
+    addon.get_state_file_path = state_module.get_state_file_path
+    addon.load_persistent_state = state_module.load_persistent_state
+    addon.save_persistent_state = state_module.save_persistent_state
+    addon.reset_persistent_state = state_module.reset_persistent_state
+    addon.get_last_processed_mod_ts = state_module.get_last_processed_mod_ts
+    addon.sync_last_processed_mod_ts = state_module.sync_last_processed_mod_ts
+    addon.get_last_sync_mod_ts = state_module.get_last_sync_mod_ts
+    addon.sync_last_sync_mod_ts = state_module.sync_last_sync_mod_ts
 
     original_mw = state_module.mw
     original_last_full_scan_date = state_module.last_full_scan_date
     original_last_unmanaged_note_ids = state_module.last_unmanaged_note_ids
+    original_last_processed_mod_ts = state_module.last_processed_mod_ts
+    original_last_sync_mod_ts = state_module.last_sync_mod_ts
     original_config = deepcopy(parser_module.config_settings)
     original_ignored_deck_ids = list(parser_module.ignored_deck_ids)
     original_custom_deck_rules_by_did = deepcopy(parser_module.custom_deck_rules_by_did)
@@ -155,9 +185,13 @@ def patched_addon_state(
     state_module.mw = SimpleNamespace(col=col, addonManager=addon_manager)
     state_module.last_full_scan_date = None
     state_module.last_unmanaged_note_ids = None
+    state_module.last_processed_mod_ts = None
+    state_module.last_sync_mod_ts = None
     addon.mw = state_module.mw
     addon.last_full_scan_date = None
     addon.last_unmanaged_note_ids = None
+    addon.last_processed_mod_ts = None
+    addon.last_sync_mod_ts = None
 
     # Configure test environment.
     parser_module.config_settings.clear()
@@ -175,9 +209,13 @@ def patched_addon_state(
         state_module.mw = original_mw
         state_module.last_full_scan_date = original_last_full_scan_date
         state_module.last_unmanaged_note_ids = original_last_unmanaged_note_ids
+        state_module.last_processed_mod_ts = original_last_processed_mod_ts
+        state_module.last_sync_mod_ts = original_last_sync_mod_ts
         addon.mw = original_mw
         addon.last_full_scan_date = original_last_full_scan_date
         addon.last_unmanaged_note_ids = original_last_unmanaged_note_ids
+        addon.last_processed_mod_ts = original_last_processed_mod_ts
+        addon.last_sync_mod_ts = original_last_sync_mod_ts
         parser_module.config_settings.clear()
         parser_module.config_settings.update(deepcopy(original_config))
         parser_module.ignored_deck_ids[:] = original_ignored_deck_ids

@@ -3,14 +3,21 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import Any, cast
 
 from anki.cards import Card, CardId
 from anki.collection import Collection
 from anki.consts import QUEUE_TYPE_SUSPENDED
 from anki.notes import Note, NoteId
+from aqt.qt import QTimer
+from aqt.utils import tooltip
 
 from ..state import SUSPENDED_BY_ADDON_TAG
 from .query import get_deck_rule
+
+DECK_UNSUSPEND_BATCH_SIZE = 1000
+DECK_UNSUSPEND_BATCH_PAUSE_MS = 500
+DECK_UNSUSPEND_TOOLTIP_PERIOD_MS = 1500
 
 
 def suspend_cards(col: Collection, cards_to_suspend: Sequence[Card], note_id: NoteId) -> None:
@@ -25,6 +32,7 @@ def suspend_cards(col: Collection, cards_to_suspend: Sequence[Card], note_id: No
         None: The operation is performed for its side effects.
     """
 
+    cards_to_suspend = [card for card in cards_to_suspend if card.queue != QUEUE_TYPE_SUSPENDED]
     if not cards_to_suspend:
         return
 
@@ -104,10 +112,48 @@ def unsuspend_all_addon_cards_in_deck(col: Collection, deck_id: str) -> None:
             card_ids_to_unsuspend.append(card.id)
             notes_to_prune[note.id] = note
 
-    if card_ids_to_unsuspend:
-        col.sched.unsuspend_cards(card_ids_to_unsuspend)
+    if not card_ids_to_unsuspend:
+        return
 
-    for note in notes_to_prune.values():
-        # Re-check the whole sibling set after unsuspending because the tag should remain
-        # until the last add-on-managed suspended card on the note is gone.
-        remove_suspension_tag_if_no_suspended_cards(col, note, note.cards())
+    total_count = len(card_ids_to_unsuspend)
+
+    def _show_unsuspend_progress(processed_count: int) -> None:
+        tooltip(
+            f"SibPush has restored {processed_count:,}/{total_count:,} cards from the ignored deck",
+            period=DECK_UNSUSPEND_TOOLTIP_PERIOD_MS,
+        )
+
+    def _finish_unsuspending() -> None:
+        for note in notes_to_prune.values():
+            # Re-check the whole sibling set after unsuspending because the tag should remain
+            # until the last add-on-managed suspended card on the note is gone.
+            remove_suspension_tag_if_no_suspended_cards(col, note, note.cards())
+
+    if total_count <= DECK_UNSUSPEND_BATCH_SIZE:
+        col.sched.unsuspend_cards(card_ids_to_unsuspend)
+        _show_unsuspend_progress(total_count)
+        _finish_unsuspending()
+        return
+
+    def _process_chunk(start_index: int = 0) -> None:
+        chunk = card_ids_to_unsuspend[start_index : start_index + DECK_UNSUSPEND_BATCH_SIZE]
+        if not chunk:
+            _finish_unsuspending()
+            return
+
+        col.sched.unsuspend_cards(chunk)
+        processed_count = min(start_index + len(chunk), total_count)
+        _show_unsuspend_progress(processed_count)
+
+        next_index = start_index + len(chunk)
+        if next_index >= total_count:
+            _finish_unsuspending()
+            return
+
+        cast(Any, QTimer).singleShot(
+            DECK_UNSUSPEND_BATCH_PAUSE_MS,
+            lambda next_start_index=next_index: _process_chunk(next_start_index),
+        )
+
+    _show_unsuspend_progress(0)
+    cast(Any, QTimer).singleShot(0, _process_chunk)
