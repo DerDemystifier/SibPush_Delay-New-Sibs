@@ -14,6 +14,13 @@ So here’s the deal. Normally when you bump into a new card, Anki shoves its si
 
 Note: It's also compatible with V3 Scheduler.
 
+### When changes take effect
+
+- Deck browser renders are the central batch-processing entry point.
+- Review actions still process the reviewed note immediately.
+- Config saves and sync completion can queue work, but SibPush applies that queued work the next time the deck browser renders.
+- That keeps the processing path easier to debug: one main door for batch work, one note-scoped door for review.
+
 ## Configuration
 
 The configuration of SibPush is straightforward and can be tailored to meet your study needs. Here are the settings you can tweak in the config file:
@@ -23,6 +30,8 @@ The configuration of SibPush is straightforward and can be tailored to meet your
 -   `custom_deck_rules`: A list of deck-specific rules. Each rule uses the deck ID (`did`) as the stable identifier, while `name` is only there to make the config easier to read. Set `ignored` to `true` to exclude a deck from the SibPush mechanism. Use `interval` to override the maturity threshold for that specific deck.
 
     You can manage the current deck's SibPush rule from the deck browser's `SibPush` submenu instead of editing JSON by hand.
+
+    When you ignore a deck, SibPush queues the cleanup work and applies it on the next deck browser render, so the browser remains the single batch-processing doorway.
 
 -   `tag_rules`: A dictionary of tag-specific rules. Each key is a note tag name, and each rule uses `interval` to override the maturity threshold for notes with that tag. Tag rules take precedence over deck rules, but ignored decks still win.
 
@@ -58,6 +67,7 @@ The configuration of SibPush is straightforward and can be tailored to meet your
 
 -   When SibPush suspends cards, it adds the `SibPush_suspended` tag to the note.
 -   On the next deck browser render, SibPush scans tagged notes and unsuspends the addon-managed cards whose remaining siblings are mature.
+-   Config changes that affect suspension rules are queued for the next deck browser render, which keeps the unsuspend/scan flow in one place.
 -   Cards suspended manually by you are not part of SibPush’s suspension lifecycle.
 
 ## Usage

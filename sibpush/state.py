@@ -7,7 +7,7 @@ import os
 import tempfile
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from aqt import mw as _mw
 from anki.notes import NoteId
@@ -24,6 +24,30 @@ last_unmanaged_note_ids: Sequence[NoteId] | None = None
 # Persistent, collection-scoped state used by the future timestamp-based scan flow.
 last_processed_mod_ts: int | None = None
 last_sync_mod_ts: int | None = None
+
+# Deferred browser-render work that should be applied before the next batch scan runs.
+# These keys live inside ``sibpush_state.json``; changing them is a schema change.
+PENDING_UNSUSPEND_DECK_IDS_KEY = "pending_unsuspend_deck_ids"
+PENDING_PROCESSING_RESET_KEY = "pending_processing_state_reset"
+PENDING_UNMANAGED_REFRESH_KEY = "pending_unmanaged_refresh"
+PENDING_BROWSER_WORK_KEY = "pending_browser_work"
+
+
+def _default_pending_browser_work() -> dict[str, Any]:
+    """Return the empty deferred browser-work payload.
+
+    Returns:
+        dict[str, Any]: A normalized browser-work snapshot with no queued decks and no flags set.
+    """
+
+    return {
+        PENDING_UNSUSPEND_DECK_IDS_KEY: [],
+        PENDING_PROCESSING_RESET_KEY: False,
+        PENDING_UNMANAGED_REFRESH_KEY: False,
+    }
+
+
+_pending_browser_work = _default_pending_browser_work()
 
 SUSPENDED_BY_ADDON_TAG = "SibPush-suspended"
 STATE_FILENAME = "sibpush_state.json"
@@ -90,23 +114,94 @@ def _normalize_timestamp(value: Any) -> int | None:
     return timestamp if timestamp >= 0 else None
 
 
+def _normalize_deck_id(value: Any) -> str | None:
+    """Convert a deck id to a non-empty string, if possible."""
+
+    normalized = str(value).strip()
+    return normalized or None
+
+
+def _normalize_deck_id_sequence(values: object) -> list[str]:
+    """Normalize a collection of deck ids while preserving the first seen order.
+
+    Args:
+        values (object): A sequence-like value containing candidate deck ids.
+
+    Returns:
+        list[str]: The cleaned, de-duplicated deck ids in first-seen order.
+    """
+
+    if not isinstance(values, Sequence) or isinstance(values, (str, bytes)):
+        return []
+
+    normalized_ids: list[str] = []
+    seen_ids: set[str] = set()
+    for value in cast(Sequence[object], values):
+        deck_id = _normalize_deck_id(value)
+        if deck_id is None or deck_id in seen_ids:
+            continue
+
+        seen_ids.add(deck_id)
+        normalized_ids.append(deck_id)
+
+    return normalized_ids
+
+
+def _normalize_pending_browser_work(value: Any) -> dict[str, Any]:
+    """Normalize a deferred browser-work payload read from disk.
+
+    Args:
+        value (Any): The raw payload from ``sibpush_state.json``.
+
+    Returns:
+        dict[str, Any]: A safe browser-work snapshot with the expected keys and types.
+    """
+
+    if not isinstance(value, dict):
+        return _default_pending_browser_work()
+
+    typed_value = cast(dict[str, object], value)
+    return {
+        PENDING_UNSUSPEND_DECK_IDS_KEY: _normalize_deck_id_sequence(
+            typed_value.get(PENDING_UNSUSPEND_DECK_IDS_KEY, [])
+        ),
+        PENDING_PROCESSING_RESET_KEY: bool(typed_value.get(PENDING_PROCESSING_RESET_KEY, False)),
+        PENDING_UNMANAGED_REFRESH_KEY: bool(typed_value.get(PENDING_UNMANAGED_REFRESH_KEY, False)),
+    }
+
+
 def _read_state_payload(state_file: Path) -> dict[str, Any]:
-    """Read a JSON payload from disk, falling back to an empty object on errors."""
+    """Read a JSON payload from disk, falling back to an empty object on errors.
+
+    Args:
+        state_file (pathlib.Path): The collection-scoped state file to read.
+
+    Returns:
+        dict[str, Any]: The raw JSON object when it looks valid, otherwise ``{}``.
+    """
 
     try:
         with state_file.open("r", encoding="utf-8") as handle:
-            payload = json.load(handle)
+            payload: Any = json.load(handle)
     except (OSError, json.JSONDecodeError, ValueError):
         return {}
 
     if not isinstance(payload, dict):
         return {}
 
-    return payload
+    return cast(dict[str, Any], payload)
 
 
 def _write_state_payload(state_file: Path, payload: dict[str, Any]) -> None:
-    """Write a JSON payload atomically to disk."""
+    """Write a JSON payload atomically to disk.
+
+    Args:
+        state_file (pathlib.Path): The collection-scoped state file to update.
+        payload (dict[str, Any]): The JSON-ready payload to persist.
+
+    Returns:
+        None: The data is written in place on disk.
+    """
 
     state_file.parent.mkdir(parents=True, exist_ok=True)
     temp_path: Path | None = None
@@ -189,8 +284,139 @@ def get_persistent_state() -> dict[str, int | None]:
     }
 
 
+def get_pending_browser_work() -> dict[str, Any]:
+    """Return a snapshot of the deferred browser work currently held in memory.
+
+    Returns:
+        dict[str, Any]: A copy of the queued browser work. Callers should mutate the copy,
+            not the module-level cache.
+    """
+
+    return {
+        PENDING_UNSUSPEND_DECK_IDS_KEY: list(
+            _pending_browser_work[PENDING_UNSUSPEND_DECK_IDS_KEY]
+        ),
+        PENDING_PROCESSING_RESET_KEY: bool(_pending_browser_work[PENDING_PROCESSING_RESET_KEY]),
+        PENDING_UNMANAGED_REFRESH_KEY: bool(_pending_browser_work[PENDING_UNMANAGED_REFRESH_KEY]),
+    }
+
+
+def sync_pending_browser_work(value: dict[str, Any] | None) -> None:
+    """Replace the deferred browser-work cache with a normalized snapshot.
+
+    Args:
+        value (dict[str, Any] | None): The browser-work payload to install in memory.
+
+    Returns:
+        None: The module-level queue cache is updated in place.
+    """
+
+    global _pending_browser_work
+    _pending_browser_work = _normalize_pending_browser_work(value)
+
+
+def queue_pending_browser_work(
+    *,
+    deck_ids: Sequence[str] | None = None,
+    reset_processing_state: bool = False,
+    refresh_unmanaged_notes: bool = False,
+) -> dict[str, Any]:
+    """Add deferred work that should run on the next browser render.
+
+    Args:
+        deck_ids (Sequence[str] | None): Deck ids to queue for unsuspend cleanup.
+        reset_processing_state (bool): Whether the browser scan watermark should be reset.
+        refresh_unmanaged_notes (bool): Whether the unmanaged-note pass should run next time.
+
+    Returns:
+        dict[str, Any]: The updated queued browser-work snapshot.
+    """
+
+    global _pending_browser_work
+
+    pending_work = get_pending_browser_work()
+    pending_deck_ids = pending_work[PENDING_UNSUSPEND_DECK_IDS_KEY]
+    seen_ids = set(pending_deck_ids)
+
+    if deck_ids is not None:
+        for deck_id in deck_ids:
+            normalized_deck_id = _normalize_deck_id(deck_id)
+            if normalized_deck_id is None or normalized_deck_id in seen_ids:
+                continue
+
+            seen_ids.add(normalized_deck_id)
+            pending_deck_ids.append(normalized_deck_id)
+
+    if reset_processing_state:
+        pending_work[PENDING_PROCESSING_RESET_KEY] = True
+
+    if refresh_unmanaged_notes:
+        pending_work[PENDING_UNMANAGED_REFRESH_KEY] = True
+
+    _pending_browser_work = pending_work
+    return get_pending_browser_work()
+
+
+def discard_pending_unsuspend_deck_id(deck_id: str) -> dict[str, Any]:
+    """Remove a deck from the deferred unsuspend queue, if it is present.
+
+    Args:
+        deck_id (str): The deck id to remove from the queued cleanup list.
+
+    Returns:
+        dict[str, Any]: The updated queued browser-work snapshot.
+    """
+
+    global _pending_browser_work
+
+    normalized_deck_id = _normalize_deck_id(deck_id)
+    if normalized_deck_id is None:
+        return get_pending_browser_work()
+
+    pending_work = get_pending_browser_work()
+    pending_deck_ids = pending_work[PENDING_UNSUSPEND_DECK_IDS_KEY]
+    filtered_deck_ids = [queued_id for queued_id in pending_deck_ids if queued_id != normalized_deck_id]
+
+    if len(filtered_deck_ids) != len(pending_deck_ids):
+        pending_work[PENDING_UNSUSPEND_DECK_IDS_KEY] = filtered_deck_ids
+        _pending_browser_work = pending_work
+
+    return get_pending_browser_work()
+
+
+def consume_pending_browser_work() -> dict[str, Any]:
+    """Return the current deferred browser work and clear the in-memory queue.
+
+    Returns:
+        dict[str, Any]: The queued browser work that was pending before the clear.
+    """
+
+    pending_work = get_pending_browser_work()
+    clear_pending_browser_work()
+    return pending_work
+
+
+def clear_pending_browser_work() -> dict[str, Any]:
+    """Reset the deferred browser-work cache to its empty state.
+
+    Returns:
+        dict[str, Any]: The empty browser-work snapshot after clearing.
+    """
+
+    global _pending_browser_work
+    _pending_browser_work = _default_pending_browser_work()
+    return get_pending_browser_work()
+
+
 def load_persistent_state(col: Any | None = None) -> dict[str, int | None]:
-    """Load persistent state from ``sibpush_state.json`` for the current collection."""
+    """Load persistent state from ``sibpush_state.json`` for the current collection.
+
+    Args:
+        col (Any | None): The collection to load state for, or ``None`` to use ``mw.col``.
+
+    Returns:
+        dict[str, int | None]: The loaded timestamp snapshot after normalization.
+    """
 
     state_file = get_state_file_path(col)
     if state_file is None or not state_file.exists():
@@ -203,7 +429,14 @@ def load_persistent_state(col: Any | None = None) -> dict[str, int | None]:
 
 
 def save_persistent_state(col: Any | None = None) -> dict[str, int | None]:
-    """Persist the current timestamp state to ``sibpush_state.json``."""
+    """Persist the current timestamp state to ``sibpush_state.json``.
+
+    Args:
+        col (Any | None): The collection whose state file should be updated.
+
+    Returns:
+        dict[str, int | None]: The timestamp snapshot currently held in memory.
+    """
 
     state_file = get_state_file_path(col)
     if state_file is None:
@@ -215,12 +448,27 @@ def save_persistent_state(col: Any | None = None) -> dict[str, int | None]:
     if last_sync_mod_ts is not None:
         payload["last_sync_mod_ts"] = last_sync_mod_ts
 
+    pending_browser_work = get_pending_browser_work()
+    if (
+        pending_browser_work[PENDING_UNSUSPEND_DECK_IDS_KEY]
+        or pending_browser_work[PENDING_PROCESSING_RESET_KEY]
+        or pending_browser_work[PENDING_UNMANAGED_REFRESH_KEY]
+    ):
+        payload[PENDING_BROWSER_WORK_KEY] = pending_browser_work
+
     _write_state_payload(state_file, payload)
     return get_persistent_state()
 
 
 def reset_persistent_state(col: Any | None = None) -> dict[str, int | None]:
-    """Clear the persisted timestamps and reset the in-memory scan state."""
+    """Clear the persisted timestamps and reset the in-memory scan state.
+
+    Args:
+        col (Any | None): The collection whose state file should be cleared.
+
+    Returns:
+        dict[str, int | None]: The cleared timestamp snapshot after reset.
+    """
 
     global last_full_scan_date, last_unmanaged_note_ids, last_processed_mod_ts, last_sync_mod_ts
     global _persistent_state_loaded
@@ -230,6 +478,7 @@ def reset_persistent_state(col: Any | None = None) -> dict[str, int | None]:
     last_processed_mod_ts = None
     last_sync_mod_ts = None
     _persistent_state_loaded = True
+    clear_pending_browser_work()
 
     state_file = get_state_file_path(col)
     if state_file is not None:
@@ -239,12 +488,17 @@ def reset_persistent_state(col: Any | None = None) -> dict[str, int | None]:
 
 
 def _apply_state_payload(payload: dict[str, Any]) -> None:
-    """Apply a JSON payload to the in-memory timestamp state."""
+    """Apply a JSON payload to the in-memory timestamp state.
+
+    Older files may not contain deferred browser work, so missing queue data is normalized to an
+    empty browser-work payload and safely loaded.
+    """
 
     global last_processed_mod_ts, last_sync_mod_ts, _persistent_state_loaded
 
     last_processed_mod_ts = _normalize_timestamp(payload.get("last_processed_mod_ts"))
     last_sync_mod_ts = _normalize_timestamp(payload.get("last_sync_mod_ts"))
+    sync_pending_browser_work(_normalize_pending_browser_work(payload.get(PENDING_BROWSER_WORK_KEY)))
     _persistent_state_loaded = True
 
 

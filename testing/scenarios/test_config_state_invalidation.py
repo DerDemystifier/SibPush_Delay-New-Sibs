@@ -55,14 +55,24 @@ def test_ignoring_a_deck_keeps_persistent_state() -> None:
 
             assert state_module.get_last_processed_mod_ts() == 123
             assert state_module.get_last_sync_mod_ts() == 456
+            assert state_module.get_pending_browser_work() == {
+                "pending_unsuspend_deck_ids": [active_rule["did"]],
+                "pending_processing_state_reset": False,
+                "pending_unmanaged_refresh": False,
+            }
             assert _read_state_file(state_module, col) == {
                 "last_processed_mod_ts": 123,
                 "last_sync_mod_ts": 456,
+                "pending_browser_work": {
+                    "pending_unsuspend_deck_ids": [active_rule["did"]],
+                    "pending_processing_state_reset": False,
+                    "pending_unmanaged_refresh": False,
+                },
             }
 
 
 def test_changing_interval_resets_persistent_state() -> None:
-    """Changing a deck interval should invalidate the cached scan timestamps."""
+    """Changing a deck interval should queue a scan reset without clearing timestamps yet."""
 
     with temporary_collection() as col:
         fake_manager = FakeAddonManager(
@@ -94,13 +104,26 @@ def test_changing_interval_resets_persistent_state() -> None:
 
             parser_module.update_custom_deck_rule(active_rule["did"], active_rule["name"], interval=33)
 
-            assert state_module.get_last_processed_mod_ts() == 0
-            assert state_module.get_last_sync_mod_ts() is None
-            assert _read_state_file(state_module, col) == {}
+            assert state_module.get_last_processed_mod_ts() == 123
+            assert state_module.get_last_sync_mod_ts() == 456
+            assert state_module.get_pending_browser_work() == {
+                "pending_unsuspend_deck_ids": [],
+                "pending_processing_state_reset": True,
+                "pending_unmanaged_refresh": False,
+            }
+            assert _read_state_file(state_module, col) == {
+                "last_processed_mod_ts": 123,
+                "last_sync_mod_ts": 456,
+                "pending_browser_work": {
+                    "pending_unsuspend_deck_ids": [],
+                    "pending_processing_state_reset": True,
+                    "pending_unmanaged_refresh": False,
+                },
+            }
 
 
 def test_changing_tag_rules_resets_persistent_state() -> None:
-    """Changing tag rules through the config save hook should invalidate cached timestamps."""
+    """Changing tag rules should queue a scan reset without clearing timestamps yet."""
 
     with temporary_collection() as col:
         fake_manager = FakeAddonManager(
@@ -130,13 +153,26 @@ def test_changing_tag_rules_resets_persistent_state() -> None:
 
             parser_module.on_config_save(config_text, addon.__name__)
 
-            assert state_module.get_last_processed_mod_ts() == 0
-            assert state_module.get_last_sync_mod_ts() is None
-            assert _read_state_file(state_module, col) == {}
+            assert state_module.get_last_processed_mod_ts() == 123
+            assert state_module.get_last_sync_mod_ts() == 456
+            assert state_module.get_pending_browser_work() == {
+                "pending_unsuspend_deck_ids": [],
+                "pending_processing_state_reset": True,
+                "pending_unmanaged_refresh": False,
+            }
+            assert _read_state_file(state_module, col) == {
+                "last_processed_mod_ts": 123,
+                "last_sync_mod_ts": 456,
+                "pending_browser_work": {
+                    "pending_unsuspend_deck_ids": [],
+                    "pending_processing_state_reset": True,
+                    "pending_unmanaged_refresh": False,
+                },
+            }
 
 
 def test_unignoring_a_deck_resets_persistent_state() -> None:
-    """Unignoring a deck should invalidate the cached scan timestamps."""
+    """Unignoring a deck should drop stale cleanup work and queue a scan reset."""
 
     with temporary_collection() as col:
         fake_manager = FakeAddonManager(
@@ -164,15 +200,29 @@ def test_unignoring_a_deck_resets_persistent_state() -> None:
             patched_addon.custom_deck_rules_by_did[ignored_rule["did"]] = ignored_rule
             patched_addon.ignored_deck_ids[:] = [ignored_rule["did"]]
 
+            state_module.queue_pending_browser_work(deck_ids=[ignored_rule["did"]])
             _seed_state(state_module, col, processed=123, synced=456)
 
             parser_module.update_custom_deck_rule(
                 ignored_rule["did"], ignored_rule["name"], ignored=False, interval=21
             )
 
-            assert state_module.get_last_processed_mod_ts() == 0
-            assert state_module.get_last_sync_mod_ts() is None
-            assert _read_state_file(state_module, col) == {}
+            assert state_module.get_last_processed_mod_ts() == 123
+            assert state_module.get_last_sync_mod_ts() == 456
+            assert state_module.get_pending_browser_work() == {
+                "pending_unsuspend_deck_ids": [],
+                "pending_processing_state_reset": True,
+                "pending_unmanaged_refresh": False,
+            }
+            assert _read_state_file(state_module, col) == {
+                "last_processed_mod_ts": 123,
+                "last_sync_mod_ts": 456,
+                "pending_browser_work": {
+                    "pending_unsuspend_deck_ids": [],
+                    "pending_processing_state_reset": True,
+                    "pending_unmanaged_refresh": False,
+                },
+            }
 
 
 if __name__ == "__main__":

@@ -31,6 +31,7 @@ class AddonModule(Protocol):
     last_unmanaged_note_ids: Sequence["NoteId"] | None
     last_processed_mod_ts: int | None
     last_sync_mod_ts: int | None
+    pending_browser_work: dict[str, object]
     config_settings: dict[str, object]
     custom_deck_rules_by_did: dict[str, dict[str, object]]
     ignored_deck_ids: list[str]
@@ -56,6 +57,24 @@ class AddonModule(Protocol):
     def get_last_sync_mod_ts(self) -> int | None: ...
 
     def sync_last_sync_mod_ts(self, value: int | None) -> None: ...
+
+    def get_pending_browser_work(self) -> dict[str, Any]: ...
+
+    def sync_pending_browser_work(self, value: dict[str, Any] | None) -> None: ...
+
+    def queue_pending_browser_work(
+        self,
+        *,
+        deck_ids: Sequence[str] | None = None,
+        reset_processing_state: bool = False,
+        refresh_unmanaged_notes: bool = False,
+    ) -> dict[str, Any]: ...
+
+    def discard_pending_unsuspend_deck_id(self, deck_id: str) -> dict[str, Any]: ...
+
+    def consume_pending_browser_work(self) -> dict[str, Any]: ...
+
+    def clear_pending_browser_work(self) -> dict[str, Any]: ...
 
     SUSPENDED_BY_ADDON_TAG: str
 
@@ -157,6 +176,7 @@ def patched_addon_state(
     addon.last_unmanaged_note_ids = state_module.last_unmanaged_note_ids
     addon.last_processed_mod_ts = state_module.last_processed_mod_ts
     addon.last_sync_mod_ts = state_module.last_sync_mod_ts
+    addon.pending_browser_work = state_module.get_pending_browser_work()
     addon.config_settings = parser_module.config_settings
     addon.custom_deck_rules_by_did = parser_module.custom_deck_rules_by_did
     addon.ignored_deck_ids = parser_module.ignored_deck_ids
@@ -171,12 +191,19 @@ def patched_addon_state(
     addon.sync_last_processed_mod_ts = state_module.sync_last_processed_mod_ts
     addon.get_last_sync_mod_ts = state_module.get_last_sync_mod_ts
     addon.sync_last_sync_mod_ts = state_module.sync_last_sync_mod_ts
+    addon.get_pending_browser_work = state_module.get_pending_browser_work
+    addon.sync_pending_browser_work = state_module.sync_pending_browser_work
+    addon.queue_pending_browser_work = state_module.queue_pending_browser_work
+    addon.discard_pending_unsuspend_deck_id = state_module.discard_pending_unsuspend_deck_id
+    addon.consume_pending_browser_work = state_module.consume_pending_browser_work
+    addon.clear_pending_browser_work = state_module.clear_pending_browser_work
 
     original_mw = state_module.mw
     original_last_full_scan_date = state_module.last_full_scan_date
     original_last_unmanaged_note_ids = state_module.last_unmanaged_note_ids
     original_last_processed_mod_ts = state_module.last_processed_mod_ts
     original_last_sync_mod_ts = state_module.last_sync_mod_ts
+    original_pending_browser_work = state_module.get_pending_browser_work()
     original_config = deepcopy(parser_module.config_settings)
     original_ignored_deck_ids = list(parser_module.ignored_deck_ids)
     original_custom_deck_rules_by_did = deepcopy(parser_module.custom_deck_rules_by_did)
@@ -187,11 +214,13 @@ def patched_addon_state(
     state_module.last_unmanaged_note_ids = None
     state_module.last_processed_mod_ts = None
     state_module.last_sync_mod_ts = None
+    state_module.clear_pending_browser_work()
     addon.mw = state_module.mw
     addon.last_full_scan_date = None
     addon.last_unmanaged_note_ids = None
     addon.last_processed_mod_ts = None
     addon.last_sync_mod_ts = None
+    addon.pending_browser_work = state_module.get_pending_browser_work()
 
     # Configure test environment.
     parser_module.config_settings.clear()
@@ -211,11 +240,13 @@ def patched_addon_state(
         state_module.last_unmanaged_note_ids = original_last_unmanaged_note_ids
         state_module.last_processed_mod_ts = original_last_processed_mod_ts
         state_module.last_sync_mod_ts = original_last_sync_mod_ts
+        state_module.sync_pending_browser_work(original_pending_browser_work)
         addon.mw = original_mw
         addon.last_full_scan_date = original_last_full_scan_date
         addon.last_unmanaged_note_ids = original_last_unmanaged_note_ids
         addon.last_processed_mod_ts = original_last_processed_mod_ts
         addon.last_sync_mod_ts = original_last_sync_mod_ts
+        addon.pending_browser_work = original_pending_browser_work
         parser_module.config_settings.clear()
         parser_module.config_settings.update(deepcopy(original_config))
         parser_module.ignored_deck_ids[:] = original_ignored_deck_ids
