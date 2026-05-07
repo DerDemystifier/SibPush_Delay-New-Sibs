@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>SibPush: Delay New Sibs</title>
+    <title>SibPush: Delay New Sibling Cards in Anki</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <link rel="stylesheet" href="assets/css/style.css" />
@@ -16,28 +16,58 @@
 
     <div class="clear"></div>
     <div id="main">
-      <div id="content" class="post"><h1 id="sibpush-delay-new-sibs"><a class="header-link" href="#sibpush-delay-new-sibs"></a>SibPush: Delay New Sibs</h1>
+      <div id="content" class="post"><h1 id="sibpush-delay-new-sibling-cards-in-anki"><a class="header-link" href="#sibpush-delay-new-sibling-cards-in-anki"></a>SibPush: Delay New Sibling Cards in Anki</h1>
 <center>
-    <img src="https://derdemystifier.github.io/SibPush_Delay-New-Sibs/images/illustration.jpg">
+    <img src="docs/images/illustration.png" alt="SibPush Illustration">
 </center>
 
 <h2 id="overview"><a class="header-link" href="#overview"></a>Overview</h2>
-<p>Meet SibPush, your Anki addon that likes to keep new sibling cards at a chill distance. It makes sure that new cards only roll in after all their siblings have cozied up in your long-term memory. No more awkward family reunions in your review sessions!</p>
+<p>Meet SibPush, your Anki addon that likes to keep new sibling cards at a chill distance. It suspends new sibling cards until their older siblings have matured, then brings them back when the deck browser is opened again. No more awkward family reunions in your review sessions!</p>
 <h2 id="purpose"><a class="header-link" href="#purpose"></a>Purpose</h2>
-<p>So here’s the deal. Normally when you bump into a new card, Anki shoves its siblings to the side for just a day. Not cool, right? SibPush steps in to save the &quot;spaced&quot; in spaced repetition. It makes sure all the siblings have had their share of the spotlight, passing the set interval before any new faces show up. This way, you get to avoid cramming and actually remember stuff long-term. It’s all about keeping the learning groove going at a neat pace.</p>
+<p>So here’s the deal. Normally when you bump into a new card, Anki shoves its siblings to the side for just a day. Not cool, right? SibPush steps in to save the &quot;spaced&quot; in spaced repetition. It suspends the new siblings that should wait, marks them with the <code>SibPush_suspended</code> tag, and checks for recovery on the next deck browser render. Once the remaining siblings are mature enough, the suspended cards are unsuspended again. This way, you get to avoid cramming and actually remember stuff long-term. It’s all about keeping the learning groove going at a neat pace.</p>
 <h2 id="configuration"><a class="header-link" href="#configuration"></a>Configuration</h2>
 <p>The configuration of SibPush is straightforward and can be tailored to meet your study needs. Here are the settings you can tweak in the config file:</p>
 <ul class="list">
-<li><p>  <code>interval</code>: The interval (in days) that must be surpassed by all siblings before new cards are introduced for review. Default is <code>21</code>.</p>
+<li><p>  <code>default_interval</code>: The interval (in days) that must be surpassed by all siblings before new cards are introduced for review. Decks that are not listed in <code>custom_deck_rules</code> use this value. Default is <code>21</code>.</p>
 </li>
-<li><p>  <code>ignored_decks</code>: A list of deck IDs or names that you want to exclude from the SibPush mechanism. For example, if you have decks that you don’t want to delay new cards on, add them here.</p>
+<li><p><code>custom_deck_rules</code>: A list of deck-specific rules. Each rule uses the deck ID (<code>did</code>) as the stable identifier, while <code>name</code> is only there to make the config easier to read. Set <code>ignored</code> to <code>true</code> to exclude a deck from the SibPush mechanism. Use <code>interval</code> to override the maturity threshold for that specific deck.</p>
+<p>  You can manage the current deck&#39;s SibPush rule from the deck browser&#39;s <code>SibPush</code> submenu instead of editing JSON by hand.</p>
+<p>  <img src="docs/images/deck_options.png" alt="SibPush Configuration"></p>
+<p>  When you ignore a deck, SibPush queues the cleanup work and applies it on the next deck browser render, so the browser remains the single batch-processing doorway.</p>
+</li>
+<li><p><code>tag_rules</code>: A dictionary of tag-specific rules. Each key is a note tag name, and each rule uses <code>interval</code> to override the maturity threshold for notes with that tag. Tag rules take precedence over deck rules, but ignored decks still win.</p>
+<pre class="prettyprint">  Example:
+
+  ```json
+  {
+      &quot;custom_deck_rules&quot;: [
+          {
+              &quot;did&quot;: &quot;1777739665453&quot;,
+              &quot;name&quot;: &quot;Country Capitals&quot;,
+              &quot;ignored&quot;: false,
+              &quot;interval&quot;: 18
+          }
+      ],
+      &quot;tag_rules&quot;: {
+          &quot;easy_topic&quot;: {
+              &quot;interval&quot;: 0
+          }
+      }
+  }
+  ```
+</pre>
 </li>
 <li><p>  <code>debug</code>: Set to <code>true</code> if you are debugging. When <code>debug</code> is true, the addon will log more information to <code>log.txt</code> file, which can be helpful for troubleshooting.</p>
 </li>
 </ul>
+<h3 id="notes"><a class="header-link" href="#notes"></a>Notes</h3>
+<ul class="list">
+<li>  When SibPush suspends cards, it adds the <code>SibPush_suspended</code> tag to the note.</li>
+<li>  Cards suspended manually by you are ignored and not managed by SibPush.</li>
+</ul>
 <h2 id="usage"><a class="header-link" href="#usage"></a>Usage</h2>
 <ol class="list">
-<li>Install the addon at .</li>
+<li>Install the addon at <a href="https://ankiweb.net/shared/info/1856111213">Anki Addons</a> .</li>
 <li>That&#39;s it! Review your decks as usual, and SibPush will take care of the rest, ensuring that new cards are introduced at the right time.</li>
 </ol>
 <p>Happy studying!</p>

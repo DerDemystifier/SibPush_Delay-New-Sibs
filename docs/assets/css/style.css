@@ -296,7 +296,7 @@ clear: both;
   h1, h2 { margin-bottom: 0.75em; }
 
 .post p {
-  /* max-width: 580px; */
+  max-width: 580px;
 }
 
 ul.list, ol.list {
