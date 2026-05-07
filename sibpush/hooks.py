@@ -39,6 +39,7 @@ from .processing.notes import (
     process_note,
     show_processing_finished_tooltip,
 )
+from .processing.suspension import unsuspend_all_addon_cards
 from .state import (
     consume_pending_browser_work,
     get_browser_scan_since_ts,
@@ -54,6 +55,14 @@ from .ui.deck_actions import add_deck_actions_to_options_menu
 
 _BROWSER_SCAN_DELAY_MS = 2000
 _pending_browser_scan = False
+
+
+def _addon_module_name() -> str:
+    """Return the top-level module name for this add-on package."""
+
+    package_name = __package__ or __name__
+    return package_name.split(".", 1)[0]
+
 
 # Keep the tooltip helper imported for tests and for parity with the processing module's
 # completion path, even though this module does not invoke it directly.
@@ -220,15 +229,20 @@ def sync_did_finish(*_args: Any) -> None:
 
 
 def on_addon_delete(dialog: Any, ids: list[str]) -> None:
-    """Shut down logging when the add-on is being deleted.
+    """Restore add-on-managed cards before the add-on is deleted.
 
     Args:
         dialog (Any): The add-ons dialog instance.
         ids (list[str]): The ids selected for deletion.
 
     Returns:
-        None: The logging system is shut down for a clean exit.
+        None: The add-on's cards are restored immediately before logging shuts down.
     """
+
+    if _addon_module_name() in ids:
+        current_mw = get_mw()
+        if current_mw is not None and getattr(current_mw, "col", None):
+            unsuspend_all_addon_cards(current_mw.col)
 
     logging.shutdown()
 
