@@ -108,6 +108,79 @@ def get_new_unmanaged_note_ids(col: Collection) -> Sequence[NoteId]:
     )
 
 
+def _build_ignored_deck_exclusion_clause(note_id_expression: str) -> str:
+    """Return a SQL clause that excludes notes with any cards in ignored decks."""
+
+    deck_ids = [deck_id for deck_id in ignored_deck_ids if deck_id]
+    if not deck_ids:
+        return ""
+
+    deck_id_list = ",".join(deck_ids)
+    return (
+        " AND NOT EXISTS ("
+        "SELECT 1 FROM cards ignored_cards "
+        f"WHERE ignored_cards.nid = {note_id_expression} "
+        f"AND ignored_cards.did IN ({deck_id_list})"
+        ")"
+    )
+
+
+def get_modified_note_ids_since(col: Collection, modified_since: int) -> Sequence[NoteId]:
+    """Return note ids whose note or card rows were modified after a timestamp.
+
+    The delta query stays note-based: it unions candidate note ids from both the notes and cards
+    tables, excludes notes in ignored decks, and keeps only notes with more than one card so the
+    downstream sibling workflow does not spend time on single-card notes that would be skipped
+    anyway.
+
+    "Note modified" (notes.mod) tracks note edits to fields' contents.
+    "Card modified" (cards.mod) tracks changes to cards, like is-suspended, is-buried, etc..
+
+    Here, we combine both types of modifications to conservatively capture any note that needs processing.
+
+    Args:
+        col (anki.collection.Collection): The collection to search.
+        modified_since (int): The modification timestamp threshold.
+
+    Returns:
+        Sequence[anki.notes.NoteId]: Eligible note ids modified after the threshold.
+    """
+
+    db = col.db
+    if db is None:
+        return []
+
+    note_exclusion_clause = _build_ignored_deck_exclusion_clause("notes.id")
+    card_exclusion_clause = _build_ignored_deck_exclusion_clause("cards.nid")
+
+    note_rows = cast(
+        list[NoteId],
+        db.list(
+            "SELECT DISTINCT notes.id "
+            f"FROM notes WHERE notes.mod > {modified_since}{note_exclusion_clause}"
+        ),
+    )
+    card_rows = cast(
+        list[NoteId],
+        db.list(
+            "SELECT DISTINCT cards.nid "
+            f"FROM cards WHERE cards.mod > {modified_since}{card_exclusion_clause}"
+        ),
+    )
+
+    candidate_note_ids = sorted(set(note_rows) | set(card_rows))
+    if not candidate_note_ids:
+        return []
+
+    nid_list = ",".join(str(n) for n in candidate_note_ids)
+    return cast(
+        list[NoteId],
+        db.list(
+            f"SELECT nid FROM cards WHERE nid IN ({nid_list}) GROUP BY nid HAVING COUNT(*) > 1"
+        ),
+    )
+
+
 def get_deck_rule(card: Card) -> dict[str, Any] | None:
     """Look up the custom deck rule associated with a card's deck.
 

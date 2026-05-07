@@ -1,12 +1,17 @@
 """Main note-processing workflow for the SibPush add-on."""
 
 from __future__ import annotations
-from collections.abc import Sequence
-from datetime import date
 
-from anki.cards import CARD_TYPE_NEW, QUEUE_TYPE_SUSPENDED, Card
+import time
+from collections.abc import Callable, Sequence
+from datetime import date
+from typing import Any, cast
+
+from anki.cards import CARD_TYPE_NEW, QUEUE_TYPE_SIBLING_BURIED, QUEUE_TYPE_SUSPENDED, Card
 from anki.collection import Collection
 from anki.notes import NoteId
+from aqt.qt import QTimer
+from aqt.utils import tooltip
 
 from ..cards.classification import classify_cards
 from ..cards.formatting import capture_snapshots, format_note_change
@@ -14,7 +19,9 @@ from ..config.parser import config_settings
 from ..logging_support import logThis
 from ..state import (
     SUSPENDED_BY_ADDON_TAG,
+    save_persistent_state,
     sync_last_full_scan_date,
+    sync_last_processed_mod_ts,
     sync_last_unmanaged_note_ids,
 )
 from .query import (
@@ -22,6 +29,7 @@ from .query import (
     get_child_cards,
     get_new_note_ids,
     get_note_interval,
+    get_modified_note_ids_since,
     should_run_unmanaged_notes,
 )
 from .suspension import (
@@ -29,6 +37,10 @@ from .suspension import (
     remove_suspension_tag_if_no_suspended_cards,
     suspend_cards,
 )
+
+MODIFIED_NOTE_BATCH_SIZE = 1000
+MODIFIED_NOTE_BATCH_PAUSE_MS = 500
+MODIFIED_NOTE_TOOLTIP_PERIOD_MS = 1500
 
 
 def process_note(
@@ -155,8 +167,9 @@ def process_note(
         # SUB-BRANCH B3: Coming from reviewer hook - special handling
         # The user just reviewed a card, so bury the next new card for tomorrow
         # to prevent immediate review of siblings
-        if coming_from_reviewer_hook:
-            # Bury the first new card until tomorrow (auto-unbury)
+        if coming_from_reviewer_hook and first_new_card.queue != QUEUE_TYPE_SIBLING_BURIED:
+            # Bury the first new card until tomorrow (auto-unbury).
+            # Skip the write if Anki already left the card buried for the day.
             col.sched.bury_cards(ids=[first_new_card.id], manual=False)
             changed = True
 
@@ -220,7 +233,7 @@ def _process_note_batch(col: Collection, note_ids: Sequence[NoteId]) -> None:
     """
 
     if config_settings["debug"]:
-        logThis(lambda: f"Processing {len(note_ids)} new note(s)")
+        logThis(lambda: f"Processing {len(note_ids)} note(s)")
 
     # Batch fetch all sibling cards for all notes in one database query
     # Returns: {note_id: [card1, card2, ...], ...}
@@ -229,6 +242,78 @@ def _process_note_batch(col: Collection, note_ids: Sequence[NoteId]) -> None:
     # Process each note with its prefetched siblings
     for note_id in note_ids:
         process_note(col, note_id, prefetched_siblings=all_siblings_by_nid.get(note_id))
+
+
+def _persist_processed_mod_timestamp(col: Collection, scan_started_at: int) -> None:
+    """Persist the processed watermark after a browser scan completes."""
+
+    sync_last_processed_mod_ts(scan_started_at)
+    save_persistent_state(col)
+
+
+def _show_modified_note_progress(processed_count: int, total_count: int) -> None:
+    """Show a short tooltip describing modified-note scan progress."""
+
+    tooltip(
+        f"SibPush has processed {processed_count:,}/{total_count:,} notes",
+        period=MODIFIED_NOTE_TOOLTIP_PERIOD_MS,
+    )
+
+
+def _run_modified_note_chunked_scan(
+    col: Collection,
+    modified_note_ids: Sequence[NoteId],
+    scan_started_at: int,
+    on_complete: Callable[[], None] | None = None,
+) -> None:
+    """Process modified note ids in chunks and pause briefly between batches.
+
+    The scan is intentionally chunked so large browser refreshes keep the UI responsive. The
+    watermark is persisted only after the entire scan completes, so a partial run does not skip
+    any remaining modified notes on the next browser refresh.
+    """
+
+    note_ids = list(modified_note_ids)
+    if not note_ids:
+        _persist_processed_mod_timestamp(col, scan_started_at)
+        if on_complete is not None:
+            on_complete()
+        return
+
+    total_count = len(note_ids)
+
+    def _finish_scan() -> None:
+        _show_modified_note_progress(total_count, total_count)
+        _persist_processed_mod_timestamp(col, scan_started_at)
+        if on_complete is not None:
+            on_complete()
+
+    def _process_chunk(start_index: int = 0) -> None:
+        try:
+            chunk = note_ids[start_index : start_index + MODIFIED_NOTE_BATCH_SIZE]
+            if not chunk:
+                _finish_scan()
+                return
+
+            _process_note_batch(col, chunk)
+            processed_count = min(start_index + len(chunk), total_count)
+            _show_modified_note_progress(processed_count, total_count)
+
+            next_index = start_index + len(chunk)
+            if next_index >= len(note_ids):
+                _finish_scan()
+                return
+
+            cast(Any, QTimer).singleShot(
+                MODIFIED_NOTE_BATCH_PAUSE_MS,
+                lambda next_start_index=next_index: _process_chunk(next_start_index),
+            )
+        except Exception:
+            if on_complete is not None:
+                on_complete()
+            raise
+
+    cast(Any, QTimer).singleShot(0, _process_chunk)
 
 
 def process_all_notes(col: Collection) -> None:
@@ -246,6 +331,34 @@ def process_all_notes(col: Collection) -> None:
 
     _process_note_batch(col, new_note_ids)
     sync_last_full_scan_date(current_full_scan_date)
+
+
+def process_modified_notes(
+    col: Collection,
+    modified_since: int,
+    on_complete: Callable[[], None] | None = None,
+) -> None:
+    """Process notes changed after a timestamp and persist the new scan watermark.
+
+    The browser path uses this helper instead of a day-gated scan. The watermark is recorded at
+    the end of the scan so we do not skip notes that were still waiting in later chunks when a
+    browser scan began.
+    """
+
+    current_scan_timestamp = int(time.time())
+    modified_note_ids = get_modified_note_ids_since(col, modified_since)
+
+    if modified_note_ids and len(modified_note_ids) <= MODIFIED_NOTE_BATCH_SIZE:
+        if modified_note_ids:
+            # Avoid calling _process_note_batch with an empty list
+            _process_note_batch(col, modified_note_ids)
+
+        _persist_processed_mod_timestamp(col, current_scan_timestamp)
+        if on_complete is not None:
+            on_complete()
+        return
+
+    _run_modified_note_chunked_scan(col, modified_note_ids, current_scan_timestamp, on_complete)
 
 
 def process_new_unmanaged_notes(col: Collection) -> None:

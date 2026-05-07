@@ -9,7 +9,7 @@ from typing import Any, cast
 from aqt import mw
 
 from ..logging_support import initialize_log_file, logThis
-from ..state import get_mw
+from ..state import get_mw, reset_persistent_state
 
 # Module-level state that caches parsed configuration data.
 # These values are derived from the raw config, kept in sync by parse_config(),
@@ -168,6 +168,77 @@ def _index_custom_deck_rules(custom_deck_rules: list[dict[str, Any]]) -> dict[st
     }
 
 
+def _extract_custom_deck_rule_effects(config_settings: dict[str, Any]) -> dict[str, tuple[bool, int]]:
+    """Return the effective ignore/interval state for each explicitly configured deck."""
+
+    default_interval = _parse_int(config_settings.get("default_interval", 21), 21)
+    raw_rules = config_settings.get("custom_deck_rules")
+    if not isinstance(raw_rules, list):
+        return {}
+
+    typed_rules = cast(list[object], raw_rules)
+    rule_effects: dict[str, tuple[bool, int]] = {}
+    for rule in typed_rules:
+        if not isinstance(rule, dict):
+            continue
+
+        rule_dict = cast(dict[str, object], rule)
+        did = str(rule_dict.get("did", "")).strip()
+        if not did:
+            continue
+
+        rule_effects[did] = (
+            bool(rule_dict.get("ignored", False)),
+            _parse_int(rule_dict.get("interval", default_interval), default_interval),
+        )
+
+    return rule_effects
+
+
+def _should_invalidate_processing_state(
+    previous_config_settings: dict[str, Any], current_config_settings: dict[str, Any]
+) -> bool:
+    """Return True when a config change should force a fresh timestamp scan.
+
+    The state is reset for changes that can alter SibPush's processing decisions:
+    - default interval changes
+    - tag rule changes
+    - deck unignore changes
+    - deck interval changes
+
+    Ignoring a deck is intentionally excluded because that path already unsuspends the cards.
+    """
+
+    previous_default_interval = _parse_int(previous_config_settings.get("default_interval", 21), 21)
+    current_default_interval = _parse_int(current_config_settings.get("default_interval", 21), 21)
+    if previous_default_interval != current_default_interval:
+        return True
+
+    if previous_config_settings.get("tag_rules", {}) != current_config_settings.get("tag_rules", {}):
+        return True
+
+    previous_deck_effects = _extract_custom_deck_rule_effects(previous_config_settings)
+    current_deck_effects = _extract_custom_deck_rule_effects(current_config_settings)
+    all_deck_ids = set(previous_deck_effects) | set(current_deck_effects)
+
+    for deck_id in all_deck_ids:
+        previous_ignored, previous_interval = previous_deck_effects.get(
+            deck_id, (False, previous_default_interval)
+        )
+        current_ignored, current_interval = current_deck_effects.get(
+            deck_id, (False, current_default_interval)
+        )
+
+        if previous_interval != current_interval:
+            return True
+
+        # Only unignore transitions should invalidate the cached scan state.
+        if previous_ignored and not current_ignored:
+            return True
+
+    return False
+
+
 def get_custom_deck_rule(deck_id: str) -> dict[str, Any] | None:
     """Return the normalized custom rule for a deck id, if one exists.
 
@@ -272,10 +343,13 @@ def refresh_config_state(config: dict[str, Any]) -> dict[str, Any]:
         dict[str, Any]: The refreshed config_settings dictionary.
     """
 
+    previous_config_settings = deepcopy(config_settings)
     # Capture the old ignored-deck list before parse_config() mutates the shared caches.
     previous_ignored_deck_ids = list(ignored_deck_ids)
     config_settings.clear()
     config_settings.update(parse_config(config))
+    if _should_invalidate_processing_state(previous_config_settings, config_settings):
+        reset_persistent_state()
     _unsuspend_cards_for_newly_ignored_decks(previous_ignored_deck_ids)
     return config_settings
 

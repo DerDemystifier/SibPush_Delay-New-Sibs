@@ -26,6 +26,19 @@ from testing.scenarios.test_keep_one_new_card_available_when_all_review_siblings
 from testing.scenarios.test_migrate_legacy_config_into_custom_deck_rules import (
     test_migrates_legacy_config_into_custom_deck_rules,
 )
+from testing.scenarios.test_config_state_invalidation import (
+    test_ignoring_a_deck_keeps_persistent_state,
+    test_changing_tag_rules_resets_persistent_state,
+    test_unignoring_a_deck_resets_persistent_state,
+)
+from testing.scenarios.test_recently_modified_note_ids import (
+    test_get_modified_note_ids_since_returns_recent_note_and_card_changes,
+)
+from testing.scenarios.test_timestamp_based_browser_scan import (
+    test_browser_render_uses_the_older_timestamp_watermark,
+    test_process_modified_notes_persists_the_processed_watermark,
+    test_sync_did_finish_persists_the_sync_watermark,
+)
 from testing.scenarios.test_process_a_single_note_without_touching_other_notes import (
     test_process_note_only_updates_the_target_note_from_reviewer_hook,
 )
@@ -53,6 +66,7 @@ from testing.scenarios.test_tag_rule_precedence_and_ignored_deck_behavior import
     test_tag_rule_takes_precedence_over_custom_deck_interval,
 )
 
+
 import io
 from contextlib import redirect_stdout
 
@@ -69,6 +83,13 @@ tests = {
     "test_keeps_one_new_card_available_for_a_fresh_three_card_note": test_keeps_one_new_card_available_for_a_fresh_three_card_note,
     "test_ignores_custom_deck_rule_by_deck_id": test_ignores_custom_deck_rule_by_deck_id,
     "test_migrates_legacy_config_into_custom_deck_rules": test_migrates_legacy_config_into_custom_deck_rules,
+    "test_ignoring_a_deck_keeps_persistent_state": test_ignoring_a_deck_keeps_persistent_state,
+    "test_changing_tag_rules_resets_persistent_state": test_changing_tag_rules_resets_persistent_state,
+    "test_unignoring_a_deck_resets_persistent_state": test_unignoring_a_deck_resets_persistent_state,
+    "test_get_modified_note_ids_since_returns_recent_note_and_card_changes": test_get_modified_note_ids_since_returns_recent_note_and_card_changes,
+    "test_browser_render_uses_the_older_timestamp_watermark": test_browser_render_uses_the_older_timestamp_watermark,
+    "test_process_modified_notes_persists_the_processed_watermark": test_process_modified_notes_persists_the_processed_watermark,
+    "test_sync_did_finish_persists_the_sync_watermark": test_sync_did_finish_persists_the_sync_watermark,
     "test_custom_deck_interval_overrides_default_interval": test_custom_deck_interval_overrides_default_interval,
     "test_update_custom_deck_rule_unsuspends_cards_when_deck_becomes_ignored": test_update_custom_deck_rule_unsuspends_cards_when_deck_becomes_ignored,
     "test_deck_browser_submenu_toggles_ignore_and_sets_interval": test_deck_browser_submenu_toggles_ignore_and_sets_interval,
