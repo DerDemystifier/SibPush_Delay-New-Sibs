@@ -7,8 +7,9 @@ The add-on uses several hooks to monitor and respond to user actions:
 2. browser_render: Run the timestamp-based browser scan
 3. reviewer_did_answer_card: Process one note after a review action
 4. sync_did_finish: Queue unmanaged-note refresh and persist the sync watermark
-5. addon_config_editor_will_update_json: Handle config changes
-6. addons_dialog_will_delete_addons: Clean shutdown
+5. addon_config_editor_will_display_json: Load the profile-local config into the editor
+6. addon_config_editor_will_update_json: Handle config changes
+7. addons_dialog_will_delete_addons: Clean shutdown
 
 The processing model now uses persisted timestamps instead of a day gate:
 - Browser renders scan modified notes since the older of the sync and processed watermarks.
@@ -30,9 +31,14 @@ from aqt import gui_hooks
 from aqt.qt import QTimer
 
 from .config.migration import migrate_legacy_config
-from .config.parser import on_config_save
+from .config.parser import on_config_display, on_config_save
 from .logging_support import initialize_log_file
-from .processing.notes import process_modified_notes, process_new_unmanaged_notes, process_note
+from .processing.notes import (
+    process_modified_notes,
+    process_new_unmanaged_notes,
+    process_note,
+    show_processing_finished_tooltip,
+)
 from .state import (
     consume_pending_browser_work,
     get_browser_scan_since_ts,
@@ -46,11 +52,13 @@ from .state import (
 from .processing.suspension import unsuspend_all_addon_cards_in_deck
 from .ui.deck_actions import add_deck_actions_to_options_menu
 
-_BROWSER_SCAN_DELAY_MS = 0
+_BROWSER_SCAN_DELAY_MS = 2000
 _pending_browser_scan = False
 
 
-def _apply_pending_browser_work_before_scan(col: Collection, pending_browser_work: dict[str, Any]) -> None:
+def _apply_pending_browser_work_before_scan(
+    col: Collection, pending_browser_work: dict[str, Any]
+) -> None:
     """Apply queued browser work that must happen before the modified-note scan.
 
     Args:
@@ -68,7 +76,9 @@ def _apply_pending_browser_work_before_scan(col: Collection, pending_browser_wor
         unsuspend_all_addon_cards_in_deck(col, str(deck_id))
 
 
-def _apply_pending_browser_work_after_scan(col: Collection, pending_browser_work: dict[str, Any]) -> None:
+def _apply_pending_browser_work_after_scan(
+    col: Collection, pending_browser_work: dict[str, Any]
+) -> None:
     """Apply queued browser work that should happen after the modified-note scan.
 
     Args:
@@ -96,6 +106,19 @@ def collection_did_load(col: Collection) -> None:
     migrate_legacy_config()
     initialize_log_file()
     load_persistent_state(col)
+
+
+def addon_config_editor_will_display_json(text: str) -> str:
+    """Show the profile-local config when the Add-ons Config panel opens.
+
+    Args:
+        text (str): The JSON text Anki is about to display.
+
+    Returns:
+        str: The JSON text to show in the editor.
+    """
+
+    return on_config_display(text)
 
 
 def browser_render(browser: Any) -> None:
@@ -137,14 +160,17 @@ def browser_render(browser: Any) -> None:
         # Apply pre-scan work first so the modified-note query sees the latest ignore/reset state.
         _apply_pending_browser_work_before_scan(col, pending_browser_work)
 
-        def _after_modified_scan() -> None:
-            try:
-                _apply_pending_browser_work_after_scan(col, pending_browser_work)
-            finally:
-                _clear_pending_browser_scan()
+        def _after_modified_scan_success() -> None:
+            _apply_pending_browser_work_after_scan(col, pending_browser_work)
+            show_processing_finished_tooltip()
 
         try:
-            process_modified_notes(col, get_browser_scan_since_ts(), on_complete=_after_modified_scan)
+            process_modified_notes(
+                col,
+                get_browser_scan_since_ts(),
+                on_complete=_clear_pending_browser_scan,
+                on_success=_after_modified_scan_success,
+            )
         except Exception:
             _clear_pending_browser_scan()
             raise
@@ -222,5 +248,6 @@ def register_hooks() -> None:
 
     # UI/config hooks.
     hooks.deck_browser_will_show_options_menu.append(add_deck_actions_to_options_menu)
+    hooks.addon_config_editor_will_display_json.append(addon_config_editor_will_display_json)
     hooks.addon_config_editor_will_update_json.append(on_config_save)
     hooks.addons_dialog_will_delete_addons.append(on_addon_delete)

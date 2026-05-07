@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from importlib import import_module
 
 from anki.consts import QUEUE_TYPE_REV, QUEUE_TYPE_SUSPENDED
@@ -9,6 +10,12 @@ from ..card_utils import assert_card_queues, set_review_card_state
 from ..collection_utils import temporary_collection
 from ..note_utils import add_note_with_siblings, build_test_notetype, make_test_deck_id
 from ..print_utils import print_collection_state
+
+
+def _read_profile_config_file(state_module: object, col: object) -> dict[str, object]:
+    config_file = state_module.get_config_file_path(col)
+    assert config_file is not None
+    return json.loads(config_file.read_text(encoding="utf-8"))
 
 
 def test_update_custom_deck_rule_unsuspends_cards_when_deck_becomes_ignored() -> None:
@@ -82,8 +89,15 @@ def test_update_custom_deck_rule_unsuspends_cards_when_deck_becomes_ignored() ->
         )
         print_collection_state(col, "After UI-driven config save (cleanup queued, not yet run)")
 
-        assert fake_manager.writes
-        assert fake_manager.writes[-1]["custom_deck_rules"][0]["ignored"] is True
+        profile_config = _read_profile_config_file(state_module, col)
+        assert profile_config["custom_deck_rules"][0]["ignored"] is True
+        assert profile_config["custom_deck_rules"][0]["did"] == str(deck_id)
+        assert fake_manager.config == {
+            "default_interval": 21,
+            "custom_deck_rules": [],
+            "tag_rules": {},
+            "debug": False,
+        }
         assert_card_queues(col, cards, [QUEUE_TYPE_REV, QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_SUSPENDED])
         assert col.get_note(note.id).has_tag(addon.SUSPENDED_BY_ADDON_TAG)
 

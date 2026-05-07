@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from copy import deepcopy
+from pathlib import Path
 from typing import Any, cast
 
 from aqt import mw
@@ -12,6 +15,7 @@ from ..logging_support import initialize_log_file, logThis
 from ..state import (
     discard_pending_unsuspend_deck_id,
     get_mw,
+    get_config_file_path,
     queue_pending_browser_work,
     save_persistent_state,
 )
@@ -47,6 +51,122 @@ def _get_addon_manager() -> Any | None:
         return current_mw.addonManager
 
     return addon_manager
+
+
+def _read_profile_config_file(config_file: Path) -> dict[str, Any]:
+    """Read a profile-local config file and normalize basic JSON failures.
+
+    Args:
+        config_file (pathlib.Path): The file to read from disk.
+
+    Returns:
+        dict[str, Any]: The decoded JSON object, or ``{}`` when the file is missing or invalid.
+    """
+
+    try:
+        with config_file.open("r", encoding="utf-8") as handle:
+            payload: Any = json.load(handle)
+    except (OSError, json.JSONDecodeError, ValueError):
+        return {}
+
+    if not isinstance(payload, dict):
+        return {}
+
+    return cast(dict[str, Any], payload)
+
+
+def _write_profile_config_file(config_file: Path, payload: dict[str, Any]) -> None:
+    """Write a profile-local config file atomically.
+
+    Args:
+        config_file (pathlib.Path): The file to update on disk.
+        payload (dict[str, Any]): The JSON-ready configuration dictionary.
+
+    Returns:
+        None: The file is updated in place.
+    """
+
+    config_file.parent.mkdir(parents=True, exist_ok=True)
+    temp_path: Path | None = None
+
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=config_file.parent,
+            prefix=f"{config_file.stem}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            json.dump(payload, handle, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+            handle.flush()
+            os.fsync(handle.fileno())
+            temp_path = Path(handle.name)
+
+        os.replace(temp_path, config_file)
+    finally:
+        if temp_path is not None and temp_path.exists():
+            try:
+                temp_path.unlink()
+            except OSError:
+                pass
+
+
+def _load_profile_config(col: Any | None = None) -> dict[str, Any] | None:
+    """Load the profile-local config snapshot when it exists.
+
+    Args:
+        col (Any | None): The collection used to resolve the profile directory.
+
+    Returns:
+        dict[str, Any] | None: The stored config object, or None when no profile file exists.
+    """
+
+    config_file = get_config_file_path(col)
+    if config_file is None or not config_file.exists():
+        return None
+
+    return _read_profile_config_file(config_file)
+
+
+def _save_profile_config(config: dict[str, Any], col: Any | None = None) -> None:
+    """Persist the current config snapshot to the profile-local file.
+
+    Args:
+        config (dict[str, Any]): The config dictionary to persist.
+        col (Any | None): The collection used to resolve the profile directory.
+
+    Returns:
+        None: The config file is updated for the current profile.
+    """
+
+    config_file = get_config_file_path(col)
+    if config_file is None:
+        return
+
+    _write_profile_config_file(config_file, config)
+
+
+def _load_initial_config() -> dict[str, Any] | None:
+    """Load the best available config snapshot at module import time.
+
+    The profile-local file wins when it exists; otherwise we fall back to the current add-on
+    manager config so first-run migrations still have something to work with.
+
+    Returns:
+        dict[str, Any] | None: The initial config snapshot, or None when no config exists yet.
+    """
+
+    profile_config = _load_profile_config()
+    if profile_config is not None:
+        return profile_config
+
+    addon_manager = _get_addon_manager()
+    if addon_manager is None:
+        return None
+
+    config_value = addon_manager.getConfig(_addon_module_name())
+    return cast(dict[str, Any], config_value) if isinstance(config_value, dict) else None
 
 
 def _parse_int(value: Any, default: int) -> int:
@@ -388,7 +508,7 @@ def refresh_config_state(config: dict[str, Any]) -> dict[str, Any]:
 def save_config_state(config: dict[str, Any]) -> dict[str, Any]:
     """Persist a config object and refresh the in-memory runtime state.
 
-    This function writes the configuration to disk via Anki's add-on manager
+    This function writes the configuration to the profile-local SibPush config file
     and then refreshes the cached runtime state.
 
     Args:
@@ -396,24 +516,9 @@ def save_config_state(config: dict[str, Any]) -> dict[str, Any]:
 
     Returns:
         dict[str, Any]: The refreshed config_settings dictionary.
-
-    Raises:
-        AttributeError: If the add-on manager doesn't provide a config write method.
     """
 
-    addon_manager = _get_addon_manager()
-    if addon_manager is not None:
-        write_config = getattr(addon_manager, "writeConfig", None) or getattr(
-            addon_manager, "setConfig", None
-        )
-        if write_config is None:
-            raise AttributeError("Anki add-on manager does not provide a config write method")
-
-        try:
-            write_config(_addon_module_name(), config)
-        except TypeError:
-            write_config(config)
-
+    _save_profile_config(config)
     return refresh_config_state(config)
 
 
@@ -536,13 +641,44 @@ def parse_config(
     }
 
 
-# Initialize the add-on configuration at module load time
-# This happens when Anki loads the add-on, ensuring config is available immediately
+# Initialize the add-on configuration at module load time.
+# This happens when Anki loads the add-on, ensuring config is available immediately.
 addon_manager: Any | None = getattr(mw, "addonManager", None) if mw else None
-config: dict[str, Any] | None = (
-    addon_manager.getConfig(_addon_module_name()) if addon_manager is not None else None
-)
+config: dict[str, Any] | None = _load_initial_config()
 config_settings: dict[str, bool | int | list[dict[str, Any]]] = parse_config(config)
+
+
+def on_config_display(config_text: str) -> str:
+    """Replace the editor JSON with the profile-local config when this looks like SibPush.
+
+    The display hook is global, so we only swap the text when the JSON being shown matches
+    SibPush's current add-on-manager config. That keeps other add-ons' config editors untouched.
+
+    Args:
+        config_text (str): The JSON text Anki is about to display.
+
+    Returns:
+        str: The profile-local config text when it exists, otherwise the original text.
+    """
+
+    addon_manager = _get_addon_manager()
+    if addon_manager is None:
+        return config_text
+
+    try:
+        displayed_config = json.loads(config_text)
+    except (TypeError, json.JSONDecodeError, ValueError):
+        return config_text
+
+    current_config = addon_manager.getConfig(_addon_module_name())
+    if not isinstance(current_config, dict) or displayed_config != current_config:
+        return config_text
+
+    profile_config = _load_profile_config()
+    if profile_config is None:
+        return config_text
+
+    return json.dumps(profile_config, ensure_ascii=False, indent=4, sort_keys=True)
 
 
 def on_config_save(config_text: str, addon: str) -> str:
@@ -559,13 +695,13 @@ def on_config_save(config_text: str, addon: str) -> str:
     global config_settings
 
     if addon != _addon_module_name():
-        # If the addon name is not mine, return the text to be saved to config.json.
+        # If the addon name is not mine, return the text to be saved unchanged.
         return config_text
 
-    # Parse text argument as json.
+    # Parse the text argument as JSON and mirror it into the profile-local config file.
     config: dict[str, object] = json.loads(config_text)
     debug_before = config_settings["debug"]
-    refresh_config_state(config)
+    save_config_state(config)
 
     if config_settings["debug"]:
         if config_settings["debug"] != debug_before:
@@ -583,5 +719,5 @@ def on_config_save(config_text: str, addon: str) -> str:
             )
         )
 
-    # Return the text to be saved to config.json.
+    # Return the text Anki should continue to use for the config editor flow.
     return config_text

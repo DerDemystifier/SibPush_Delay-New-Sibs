@@ -42,6 +42,7 @@ from .suspension import (
 MODIFIED_NOTE_BATCH_SIZE = 1000
 MODIFIED_NOTE_BATCH_PAUSE_MS = 500
 MODIFIED_NOTE_TOOLTIP_PERIOD_MS = 1500
+PROCESSING_FINISHED_TOOLTIP_PERIOD_MS = 1500
 
 
 def _get_variable_chunk_size(batch_size: int) -> int:
@@ -270,11 +271,21 @@ def _show_modified_note_progress(processed_count: int, total_count: int) -> None
     )
 
 
+def show_processing_finished_tooltip() -> None:
+    """Show a short tooltip when the browser batch has finished."""
+
+    tooltip(
+        "SibPush has finished processing",
+        period=PROCESSING_FINISHED_TOOLTIP_PERIOD_MS,
+    )
+
+
 def _run_modified_note_chunked_scan(
     col: Collection,
     modified_note_ids: Sequence[NoteId],
     scan_started_at: int,
     on_complete: Callable[[], None] | None = None,
+    on_success: Callable[[], None] | None = None,
 ) -> None:
     """Process modified note ids in chunks and pause briefly between batches.
 
@@ -296,8 +307,12 @@ def _run_modified_note_chunked_scan(
     def _finish_scan() -> None:
         _show_modified_note_progress(total_count, total_count)
         _persist_processed_mod_timestamp(col, scan_started_at)
-        if on_complete is not None:
-            on_complete()
+        try:
+            if on_success is not None:
+                on_success()
+        finally:
+            if on_complete is not None:
+                on_complete()
 
     def _process_chunk(start_index: int = 0) -> None:
         nonlocal displayed_count
@@ -350,12 +365,24 @@ def process_modified_notes(
     col: Collection,
     modified_since: int,
     on_complete: Callable[[], None] | None = None,
+    on_success: Callable[[], None] | None = None,
 ) -> None:
     """Process notes changed after a timestamp and persist the new scan watermark.
 
     The browser path uses this helper instead of a day-gated scan. The watermark is recorded at
     the end of the scan so we do not skip notes that were still waiting in later chunks when a
     browser scan began.
+
+    Args:
+        col (anki.collection.Collection): The collection to process.
+        modified_since (int): The timestamp threshold for changed notes.
+        on_complete (Callable[[], None] | None): Cleanup callback that always runs when the scan
+            finishes or errors.
+        on_success (Callable[[], None] | None): Optional callback that runs only after a
+            successful scan.
+
+    Returns:
+        None: The collection is updated in place.
     """
 
     current_scan_timestamp = int(time.time())
@@ -367,11 +394,21 @@ def process_modified_notes(
             _process_note_batch(col, modified_note_ids)
 
         _persist_processed_mod_timestamp(col, current_scan_timestamp)
-        if on_complete is not None:
-            on_complete()
+        try:
+            if on_success is not None:
+                on_success()
+        finally:
+            if on_complete is not None:
+                on_complete()
         return
 
-    _run_modified_note_chunked_scan(col, modified_note_ids, current_scan_timestamp, on_complete)
+    _run_modified_note_chunked_scan(
+        col,
+        modified_note_ids,
+        current_scan_timestamp,
+        on_complete,
+        on_success,
+    )
 
 
 def process_new_unmanaged_notes(col: Collection) -> None:

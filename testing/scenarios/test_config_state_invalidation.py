@@ -20,6 +20,12 @@ def _read_state_file(state_module: object, col: object) -> dict[str, object]:
     return json.loads(state_file.read_text(encoding="utf-8"))
 
 
+def _read_profile_config_file(state_module: object, col: object) -> dict[str, object]:
+    config_file = state_module.get_config_file_path(col)
+    assert config_file is not None
+    return json.loads(config_file.read_text(encoding="utf-8"))
+
+
 def test_ignoring_a_deck_keeps_persistent_state() -> None:
     """Ignoring a deck should not invalidate the persistent scan timestamps."""
 
@@ -69,6 +75,8 @@ def test_ignoring_a_deck_keeps_persistent_state() -> None:
                     "pending_unmanaged_refresh": False,
                 },
             }
+            profile_config = _read_profile_config_file(state_module, col)
+            assert profile_config["custom_deck_rules"][0]["ignored"] is True
 
 
 def test_changing_interval_resets_persistent_state() -> None:
@@ -120,6 +128,8 @@ def test_changing_interval_resets_persistent_state() -> None:
                     "pending_unmanaged_refresh": False,
                 },
             }
+            profile_config = _read_profile_config_file(state_module, col)
+            assert profile_config["custom_deck_rules"][0]["interval"] == 33
 
 
 def test_changing_tag_rules_resets_persistent_state() -> None:
@@ -169,6 +179,8 @@ def test_changing_tag_rules_resets_persistent_state() -> None:
                     "pending_unmanaged_refresh": False,
                 },
             }
+            profile_config = _read_profile_config_file(state_module, col)
+            assert profile_config["tag_rules"]["topic"]["interval"] == 0
 
 
 def test_unignoring_a_deck_resets_persistent_state() -> None:
@@ -223,6 +235,8 @@ def test_unignoring_a_deck_resets_persistent_state() -> None:
                     "pending_unmanaged_refresh": False,
                 },
             }
+            profile_config = _read_profile_config_file(state_module, col)
+            assert profile_config["custom_deck_rules"][0]["ignored"] is False
 
 
 if __name__ == "__main__":
