@@ -51,6 +51,7 @@ _pending_browser_work = _default_pending_browser_work()
 
 SUSPENDED_BY_ADDON_TAG = "SibPush-suspended"
 STATE_FILENAME = "sibpush_state.json"
+CONFIG_FILENAME = "sibpush_config.json"
 _persistent_state_loaded = False
 
 
@@ -98,6 +99,25 @@ def get_state_file_path(col: Any | None = None) -> Path | None:
         return None
 
     return collection_path.with_name(STATE_FILENAME)
+
+
+def get_config_file_path(col: Any | None = None) -> Path | None:
+    """Return the per-profile config file path.
+
+    Args:
+        col (Any | None): The collection to resolve the path from. When omitted,
+            the current ``mw.col`` value is used.
+
+    Returns:
+        Path | None: The sibling ``sibpush_config.json`` path, or None when no collection path
+            exists.
+    """
+
+    collection_path = _resolve_collection_path(col)
+    if collection_path is None:
+        return None
+
+    return collection_path.with_name(CONFIG_FILENAME)
 
 
 def _normalize_timestamp(value: Any) -> int | None:

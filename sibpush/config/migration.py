@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from . import parser
-from ..state import get_mw
+from ..state import get_config_file_path, get_mw
 
 
 def _get_deck_lookup() -> dict[str, str]:
@@ -82,29 +82,29 @@ def migrate_legacy_config() -> bool:
         bool: True when a migration was written, otherwise False.
     """
 
+    profile_config_file = get_config_file_path()
+    if profile_config_file is not None and profile_config_file.exists():
+        return False
+
     addon_manager = parser.addon_manager
     if addon_manager is None:
         return False
 
     current_config = addon_manager.getConfig(parser._addon_module_name())
-    if not isinstance(current_config, dict) or "ignored_decks" not in current_config:
+    if not isinstance(current_config, dict):
         return False
 
-    migrated_config = _build_migrated_config(current_config, _get_deck_lookup())
-    if migrated_config is None:
-        return False
+    if "ignored_decks" in current_config:
+        migrated_config = _build_migrated_config(current_config, _get_deck_lookup())
+        if migrated_config is None:
+            return False
 
-    write_config = getattr(addon_manager, "writeConfig", None) or getattr(
-        addon_manager, "setConfig", None
-    )
-    if write_config is None:
-        raise AttributeError("Anki add-on manager does not provide a config write method")
+        parser._save_profile_config(migrated_config)
+        parser.config_settings.clear()
+        parser.config_settings.update(parser.parse_config(migrated_config))
+        return True
 
-    try:
-        write_config(parser._addon_module_name(), migrated_config)
-    except TypeError:
-        write_config(migrated_config)
-
+    parser._save_profile_config(current_config)
     parser.config_settings.clear()
-    parser.config_settings.update(parser.parse_config(migrated_config))
+    parser.config_settings.update(parser.parse_config(current_config))
     return True

@@ -1,11 +1,18 @@
 from __future__ import annotations
 
+import json
 from importlib import import_module
 from unittest.mock import patch
 
 from ..addon_utils import FakeAddonManager, patched_addon_state
 from ..collection_utils import temporary_collection
 from ..note_utils import make_test_deck_id
+
+
+def _read_profile_config_file(state_module: object, col: object) -> dict[str, object]:
+    config_file = state_module.get_config_file_path(col)
+    assert config_file is not None
+    return json.loads(config_file.read_text(encoding="utf-8"))
 
 
 class _FakeSignal:
@@ -61,6 +68,7 @@ def test_deck_browser_submenu_toggles_ignore_and_sets_interval() -> None:
         with patched_addon_state(col, addon_manager=fake_manager) as patched_addon:
             addon = patched_addon
             deck_actions = import_module(f"{addon.__name__}.sibpush.ui.deck_actions")
+            state_module = import_module(f"{addon.__name__}.sibpush.state")
 
             menu = _FakeMenu("root")
             deck_actions.add_deck_actions_to_options_menu(menu, deck_id)
@@ -74,8 +82,9 @@ def test_deck_browser_submenu_toggles_ignore_and_sets_interval() -> None:
             ]
 
             submenu.actions[0].triggered.callbacks[0]()
-            assert fake_manager.writes[-1]["custom_deck_rules"][0]["did"] == str(deck_id)
-            assert fake_manager.writes[-1]["custom_deck_rules"][0]["ignored"] is True
+            profile_config = _read_profile_config_file(state_module, col)
+            assert profile_config["custom_deck_rules"][0]["did"] == str(deck_id)
+            assert profile_config["custom_deck_rules"][0]["ignored"] is True
 
             refreshed_menu = _FakeMenu("root")
             deck_actions.add_deck_actions_to_options_menu(refreshed_menu, deck_id)
@@ -84,8 +93,15 @@ def test_deck_browser_submenu_toggles_ignore_and_sets_interval() -> None:
             with patch.object(deck_actions.QInputDialog, "getInt", return_value=(33, True)):
                 refreshed_menu.submenus[0].actions[1].triggered.callbacks[0]()
 
-            assert fake_manager.writes[-1]["custom_deck_rules"][0]["interval"] == 33
-            assert fake_manager.writes[-1]["custom_deck_rules"][0]["ignored"] is True
+            profile_config = _read_profile_config_file(state_module, col)
+            assert profile_config["custom_deck_rules"][0]["interval"] == 33
+            assert profile_config["custom_deck_rules"][0]["ignored"] is True
+            assert fake_manager.config == {
+                "default_interval": 21,
+                "custom_deck_rules": [],
+                "tag_rules": {},
+                "debug": False,
+            }
 
 
 if __name__ == "__main__":

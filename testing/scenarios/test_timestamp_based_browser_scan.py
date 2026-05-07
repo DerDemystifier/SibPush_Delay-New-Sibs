@@ -34,15 +34,18 @@ def test_browser_render_uses_the_older_timestamp_watermark() -> None:
                 col_arg: object,
                 modified_since: int,
                 on_complete: object | None = None,
+                on_success: object | None = None,
             ) -> None:
                 captured["col"] = col_arg
                 captured["modified_since"] = modified_since
+                if callable(on_success):
+                    on_success()
                 if callable(on_complete):
                     on_complete()
 
             with patch.object(hooks_module.QTimer, "singleShot", side_effect=fake_single_shot), patch.object(
                 hooks_module, "process_modified_notes", side_effect=fake_process_modified_notes
-            ):
+            ), patch.object(hooks_module, "show_processing_finished_tooltip"):
                 hooks_module.browser_render(browser)
 
                 assert scheduled["delay_ms"] == 2000
@@ -91,8 +94,11 @@ def test_browser_render_applies_queued_browser_work_before_scanning() -> None:
                 col_arg: object,
                 modified_since: int,
                 on_complete: object | None = None,
+                on_success: object | None = None,
             ) -> None:
                 events.append(f"scan:{modified_since}")
+                if callable(on_success):
+                    on_success()
                 if callable(on_complete):
                     on_complete()
 
@@ -107,7 +113,7 @@ def test_browser_render_applies_queued_browser_work_before_scanning() -> None:
                 hooks_module, "process_modified_notes", side_effect=fake_process_modified_notes
             ), patch.object(
                 hooks_module, "process_new_unmanaged_notes", side_effect=fake_process_new_unmanaged_notes
-            ):
+            ), patch.object(hooks_module, "show_processing_finished_tooltip"):
                 hooks_module.browser_render(browser)
 
                 assert scheduled["delay_ms"] == 2000

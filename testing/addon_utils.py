@@ -44,6 +44,8 @@ class AddonModule(Protocol):
 
     def get_state_file_path(self, col: "Collection" | None = None) -> Any: ...
 
+    def get_config_file_path(self, col: "Collection" | None = None) -> Any: ...
+
     def load_persistent_state(self, col: "Collection" | None = None) -> dict[str, int | None]: ...
 
     def save_persistent_state(self, col: "Collection" | None = None) -> dict[str, int | None]: ...
@@ -184,6 +186,7 @@ def patched_addon_state(
     addon.process_new_unmanaged_notes = notes_module.process_new_unmanaged_notes
     addon.process_note = notes_module.process_note
     addon.get_state_file_path = state_module.get_state_file_path
+    addon.get_config_file_path = state_module.get_config_file_path
     addon.load_persistent_state = state_module.load_persistent_state
     addon.save_persistent_state = state_module.save_persistent_state
     addon.reset_persistent_state = state_module.reset_persistent_state
