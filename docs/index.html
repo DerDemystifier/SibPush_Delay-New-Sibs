@@ -18,7 +18,7 @@
     <div id="main">
       <div id="content" class="post"><h1 id="sibpush-delay-new-sibling-cards-in-anki"><a class="header-link" href="#sibpush-delay-new-sibling-cards-in-anki"></a>SibPush: Delay New Sibling Cards in Anki</h1>
 <center>
-    <img src="docs/images/illustration.png" alt="SibPush Illustration">
+    <img src="images/illustration.png" alt="SibPush Illustration">
 </center>
 
 <h2 id="overview"><a class="header-link" href="#overview"></a>Overview</h2>
@@ -33,7 +33,7 @@
 </li>
 <li><p><code>custom_deck_rules</code>: A list of deck-specific rules. Each rule uses the deck ID (<code>did</code>) as the stable identifier, while <code>name</code> is only there to make the config easier to read. Set <code>ignored</code> to <code>true</code> to exclude a deck from the SibPush mechanism. Use <code>interval</code> to override the maturity threshold for that specific deck.</p>
 <p>  You can manage the current deck&#39;s SibPush rule from the deck browser&#39;s <code>SibPush</code> submenu instead of editing JSON by hand.</p>
-<p>  <img src="docs/images/deck_options.png" alt="SibPush Configuration"></p>
+<p>  <img src="images/deck_options.png" alt="SibPush Configuration"></p>
 <p>  When you ignore a deck, SibPush queues the cleanup work and applies it on the next deck browser render, so the browser remains the single batch-processing doorway.</p>
 </li>
 <li><p><code>tag_rules</code>: A dictionary of tag-specific rules. Each key is a note tag name, and each rule uses <code>interval</code> to override the maturity threshold for notes with that tag. Tag rules take precedence over deck rules, but ignored decks still win.</p>
