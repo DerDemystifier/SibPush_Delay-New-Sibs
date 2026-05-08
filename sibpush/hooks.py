@@ -7,9 +7,10 @@ The add-on uses several hooks to monitor and respond to user actions:
 2. browser_render: Run the timestamp-based browser scan
 3. reviewer_did_answer_card: Process one note after a review action
 4. sync_did_finish: Queue unmanaged-note refresh and persist the sync watermark
-5. addon_config_editor_will_display_json: Load the profile-local config into the editor
-6. addon_config_editor_will_update_json: Handle config changes
-7. addons_dialog_will_delete_addons: Clean shutdown
+5. collection_will_temporarily_close: Queue a full reprocessing pass before one-way syncs
+6. addon_config_editor_will_display_json: Load the profile-local config into the editor
+7. addon_config_editor_will_update_json: Handle config changes
+8. addons_dialog_will_delete_addons: Clean shutdown
 
 The processing model now uses persisted timestamps instead of a day gate:
 - Browser renders scan modified notes since the older of the sync and processed watermarks.
@@ -234,6 +235,27 @@ def sync_did_finish(*_args: Any) -> None:
     save_persistent_state(current_mw.col)
 
 
+def collection_will_temporarily_close(col: Collection) -> None:
+    """Queue a full browser reprocessing pass before Anki temporarily closes the collection.
+
+    This hook runs before one-way syncs and colpkg import/export operations. Those flows can
+    rewrite note/card modification timestamps or revert previously processed cards, so we treat
+    them as a boundary that invalidates the current scan watermark.
+
+    Args:
+        col (anki.collection.Collection): The collection that is about to be closed temporarily.
+
+    Returns:
+        None: The next browser render will perform a full modified-note rescan.
+    """
+
+    # Queue a full reset rather than trying to infer which rows changed. One-way syncs and
+    # import/export operations can make `notes.mod` and `cards.mod` move backwards, so the
+    # timestamp window is no longer trustworthy after this boundary.
+    queue_pending_browser_work(reset_processing_state=True)
+    save_persistent_state(col)
+
+
 def on_addon_delete(dialog: Any, ids: list[str]) -> None:
     """Restore add-on-managed cards before the add-on is deleted.
 
@@ -269,6 +291,7 @@ def register_hooks() -> None:
     hooks.deck_browser_did_render.append(browser_render)
     hooks.reviewer_did_answer_card.append(reviewer_did_answer_card)
     hooks.sync_did_finish.append(sync_did_finish)
+    hooks.collection_will_temporarily_close.append(collection_will_temporarily_close)
 
     # UI/config hooks.
     hooks.deck_browser_will_show_options_menu.append(add_deck_actions_to_options_menu)
