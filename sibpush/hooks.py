@@ -7,7 +7,7 @@ The add-on uses several hooks to monitor and respond to user actions:
 2. browser_render: Run the timestamp-based browser scan
 3. reviewer_did_answer_card: Process one note after a review action
 4. sync_did_finish: Queue unmanaged-note refresh and persist the sync watermark
-5. collection_will_temporarily_close: Queue a full reprocessing pass before one-way syncs
+5. collection_did_temporarily_close: Queue a full reprocessing pass after one-way syncs
 6. addon_config_editor_will_display_json: Load the profile-local config into the editor
 7. addon_config_editor_will_update_json: Handle config changes
 8. addons_dialog_will_delete_addons: Clean shutdown
@@ -55,8 +55,9 @@ from .state import (
 from .processing.suspension import unsuspend_all_addon_cards_in_deck
 from .ui.deck_actions import add_deck_actions_to_options_menu
 
-_BROWSER_SCAN_DELAY_MS = 2000
+_BROWSER_SCAN_DELAY_MS = 500
 _pending_browser_scan = False
+_skip_next_browser_render_scan = False
 
 
 def _addon_module_name() -> str:
@@ -161,25 +162,41 @@ def browser_render(browser: Any) -> None:
         # A browser scan is already scheduled - don't queue another one.
         return
 
-    _pending_browser_scan = True
+    global _skip_next_browser_render_scan
+    if _skip_next_browser_render_scan:
+        # The browser often refreshes immediately after SibPush finishes a scan. That refresh is
+        # a follow-up to the scan we just completed, so we drop exactly one render and then allow
+        # the browser to schedule new scans again.
+        _skip_next_browser_render_scan = False
+        return
 
     col = browser.mw.col
+
+    # We set the in-flight flag only when we are actually about to schedule work. The flag stays
+    # raised until the event loop has had a chance to settle after the scan, which prevents the
+    # browser refresh that the scan itself causes from launching a second scan immediately.
+    _pending_browser_scan = True
+
+    pending_browser_work = consume_pending_browser_work()
+
+    # Consume the queue once so we do not replay config or sync work on the next render.
+    # Apply pre-scan work first so the modified-note query sees the latest ignore/reset state.
+    _apply_pending_browser_work_before_scan(col, pending_browser_work)
+    browser_scan_since_ts = get_browser_scan_since_ts()
 
     def _clear_pending_browser_scan() -> None:
         global _pending_browser_scan
         _pending_browser_scan = False
 
     def _run_browser_render() -> None:
-        pending_browser_work = consume_pending_browser_work()
-
-        # Consume the queue once so we do not replay config or sync work on the next render.
-        # Apply pre-scan work first so the modified-note query sees the latest ignore/reset state.
-        _apply_pending_browser_work_before_scan(col, pending_browser_work)
-        browser_scan_since_ts = get_browser_scan_since_ts()
-
         def _after_modified_scan_success() -> None:
+            global _skip_next_browser_render_scan
             if clear_stale_sync_mod_ts():
                 save_persistent_state(col)
+
+            # Mark the next browser refresh as a follow-up to this scan so the browser does not
+            # immediately schedule a second pass just because the UI redrew after the changes.
+            _skip_next_browser_render_scan = True
 
             if browser_scan_since_ts > 0:
                 _apply_pending_browser_work_after_scan(col, pending_browser_work)
@@ -235,10 +252,10 @@ def sync_did_finish(*_args: Any) -> None:
     save_persistent_state(current_mw.col)
 
 
-def collection_will_temporarily_close(col: Collection) -> None:
-    """Queue a full browser reprocessing pass before Anki temporarily closes the collection.
+def collection_did_temporarily_close(col: Collection) -> None:
+    """Queue a full browser reprocessing pass after Anki temporarily closes the collection.
 
-    This hook runs before one-way syncs and colpkg import/export operations. Those flows can
+    This hook runs after one-way syncs and colpkg import/export operations. Those flows can
     rewrite note/card modification timestamps or revert previously processed cards, so we treat
     them as a boundary that invalidates the current scan watermark.
 
@@ -291,7 +308,7 @@ def register_hooks() -> None:
     hooks.deck_browser_did_render.append(browser_render)
     hooks.reviewer_did_answer_card.append(reviewer_did_answer_card)
     hooks.sync_did_finish.append(sync_did_finish)
-    hooks.collection_will_temporarily_close.append(collection_will_temporarily_close)
+    hooks.collection_did_temporarily_close.append(collection_did_temporarily_close)
 
     # UI/config hooks.
     hooks.deck_browser_will_show_options_menu.append(add_deck_actions_to_options_menu)

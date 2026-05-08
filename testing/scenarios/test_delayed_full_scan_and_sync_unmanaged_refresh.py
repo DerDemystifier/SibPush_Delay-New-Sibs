@@ -132,7 +132,7 @@ def test_sync_finish_processes_only_unmanaged_new_notes() -> None:
         assert col.get_note(new_note.id).has_tag(addon.SUSPENDED_BY_ADDON_TAG)
 
 
-def test_collection_will_temporarily_close_queues_a_full_reset() -> None:
+def test_collection_did_temporarily_close_queues_a_full_reset() -> None:
     """Temporary collection closure should queue a full browser reprocessing pass.
 
     One-way syncs and collection imports/exports can rewrite `mod` timestamps or revert cards
@@ -154,7 +154,7 @@ def test_collection_will_temporarily_close_queues_a_full_reset() -> None:
             state_module.queue_pending_browser_work(refresh_unmanaged_notes=True)
             state_module.save_persistent_state(col)
 
-            hooks_module.collection_will_temporarily_close(col)
+            hooks_module.collection_did_temporarily_close(col)
 
             assert state_module.get_last_processed_mod_ts() == 123
             assert state_module.get_last_sync_mod_ts() == 456
@@ -173,4 +173,4 @@ def test_collection_will_temporarily_close_queues_a_full_reset() -> None:
 if __name__ == "__main__":
     test_browser_render_delays_the_initial_full_scan()
     test_sync_finish_processes_only_unmanaged_new_notes()
-    test_collection_will_temporarily_close_queues_a_full_reset()
+    test_collection_did_temporarily_close_queues_a_full_reset()
