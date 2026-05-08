@@ -50,7 +50,7 @@ def test_state_file_round_trips_and_reset_clears_memory() -> None:
                 "pending_browser_work": {
                     "pending_unsuspend_deck_ids": ["1777739665453", "1777739665454"],
                     "pending_processing_state_reset": True,
-                    "pending_unmanaged_refresh": True,
+                    "pending_unmanaged_refresh": False,
                 },
             }
 
@@ -66,7 +66,7 @@ def test_state_file_round_trips_and_reset_clears_memory() -> None:
             assert state_module.get_pending_browser_work() == {
                 "pending_unsuspend_deck_ids": ["1777739665453", "1777739665454"],
                 "pending_processing_state_reset": True,
-                "pending_unmanaged_refresh": True,
+                "pending_unmanaged_refresh": False,
             }
 
             reset_state = state_module.reset_persistent_state(col)

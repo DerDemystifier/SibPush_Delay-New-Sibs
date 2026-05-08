@@ -36,6 +36,8 @@ from testing.scenarios.test_recently_modified_note_ids import (
 )
 from testing.scenarios.test_timestamp_based_browser_scan import (
     test_browser_render_uses_the_older_timestamp_watermark,
+    test_browser_render_runs_unmanaged_refresh_after_partial_scan,
+    test_browser_render_clears_stale_sync_watermark_after_scan,
     test_process_modified_notes_persists_the_processed_watermark,
     test_sync_did_finish_persists_the_sync_watermark,
 )
@@ -88,6 +90,8 @@ tests = {
     "test_unignoring_a_deck_resets_persistent_state": test_unignoring_a_deck_resets_persistent_state,
     "test_get_modified_note_ids_since_returns_recent_note_and_card_changes": test_get_modified_note_ids_since_returns_recent_note_and_card_changes,
     "test_browser_render_uses_the_older_timestamp_watermark": test_browser_render_uses_the_older_timestamp_watermark,
+    "test_browser_render_runs_unmanaged_refresh_after_partial_scan": test_browser_render_runs_unmanaged_refresh_after_partial_scan,
+    "test_browser_render_clears_stale_sync_watermark_after_scan": test_browser_render_clears_stale_sync_watermark_after_scan,
     "test_process_modified_notes_persists_the_processed_watermark": test_process_modified_notes_persists_the_processed_watermark,
     "test_sync_did_finish_persists_the_sync_watermark": test_sync_did_finish_persists_the_sync_watermark,
     "test_custom_deck_interval_overrides_default_interval": test_custom_deck_interval_overrides_default_interval,
