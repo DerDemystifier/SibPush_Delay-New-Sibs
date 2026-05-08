@@ -200,13 +200,20 @@ def _normalize_pending_browser_work(value: Any) -> dict[str, Any]:
         return _default_pending_browser_work()
 
     typed_value = cast(dict[str, object], value)
-    return {
+    normalized_work = {
         PENDING_UNSUSPEND_DECK_IDS_KEY: _normalize_deck_id_sequence(
             typed_value.get(PENDING_UNSUSPEND_DECK_IDS_KEY, [])
         ),
         PENDING_PROCESSING_RESET_KEY: bool(typed_value.get(PENDING_PROCESSING_RESET_KEY, False)),
         PENDING_UNMANAGED_REFRESH_KEY: bool(typed_value.get(PENDING_UNMANAGED_REFRESH_KEY, False)),
     }
+
+    if normalized_work[PENDING_PROCESSING_RESET_KEY]:
+        # A full reset already implies a full modified-note scan on the next browser render,
+        # so the unmanaged follow-up would only duplicate work and make the UI stutter.
+        normalized_work[PENDING_UNMANAGED_REFRESH_KEY] = False
+
+    return normalized_work
 
 
 def _read_state_payload(state_file: Path) -> dict[str, Any]:
@@ -289,6 +296,31 @@ def get_last_sync_mod_ts() -> int | None:
     """Return the last sync modification timestamp, if one exists."""
 
     return last_sync_mod_ts
+
+
+def clear_stale_sync_mod_ts() -> bool:
+    """Clear the stale sync watermark after the browser has caught up.
+
+    The sync watermark is used to catch up on remote changes when the browser scan
+    has not yet processed them locally. Once the local scan has advanced past the
+    sync timestamp, keeping the old sync watermark would cause subsequent browser
+    refreshes to keep scanning the same already-processed window again and again.
+    This helper drops the stale sync watermark when it is older than or equal to
+    the last processed timestamp, preventing repeated rescan loops.
+
+    Returns:
+        bool: True when the stale sync watermark was cleared, otherwise False.
+    """
+
+    current_sync_ts = get_last_sync_mod_ts()
+    if current_sync_ts is None:
+        return False
+
+    if current_sync_ts <= get_last_processed_mod_ts():
+        sync_last_sync_mod_ts(None)
+        return True
+
+    return False
 
 
 def get_browser_scan_since_ts() -> int:
@@ -386,9 +418,12 @@ def queue_pending_browser_work(
 
     if reset_processing_state:
         pending_work[PENDING_PROCESSING_RESET_KEY] = True
+        # A queued full reset supersedes the lighter unmanaged follow-up.
+        pending_work[PENDING_UNMANAGED_REFRESH_KEY] = False
 
     if refresh_unmanaged_notes:
-        pending_work[PENDING_UNMANAGED_REFRESH_KEY] = True
+        if not pending_work[PENDING_PROCESSING_RESET_KEY]:
+            pending_work[PENDING_UNMANAGED_REFRESH_KEY] = True
 
     _pending_browser_work = pending_work
     return get_pending_browser_work()

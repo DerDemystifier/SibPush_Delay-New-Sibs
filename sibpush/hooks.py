@@ -42,6 +42,7 @@ from .processing.notes import (
 from .processing.suspension import unsuspend_all_addon_cards
 from .state import (
     consume_pending_browser_work,
+    clear_stale_sync_mod_ts,
     get_browser_scan_since_ts,
     get_mw,
     load_persistent_state,
@@ -173,14 +174,19 @@ def browser_render(browser: Any) -> None:
         # Consume the queue once so we do not replay config or sync work on the next render.
         # Apply pre-scan work first so the modified-note query sees the latest ignore/reset state.
         _apply_pending_browser_work_before_scan(col, pending_browser_work)
+        browser_scan_since_ts = get_browser_scan_since_ts()
 
         def _after_modified_scan_success() -> None:
-            _apply_pending_browser_work_after_scan(col, pending_browser_work)
+            if clear_stale_sync_mod_ts():
+                save_persistent_state(col)
+
+            if browser_scan_since_ts > 0:
+                _apply_pending_browser_work_after_scan(col, pending_browser_work)
 
         try:
             process_modified_notes(
                 col,
-                get_browser_scan_since_ts(),
+                browser_scan_since_ts,
                 on_complete=_clear_pending_browser_scan,
                 on_success=_after_modified_scan_success,
             )

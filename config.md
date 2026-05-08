@@ -13,7 +13,6 @@
 
     The deck browser also exposes a `SibPush` submenu for the current deck so you can toggle `ignored` or update `interval` without editing the config file directly.
 
-    **When changes take effect:** SibPush refreshes its in-memory config immediately, but any batch work caused by the change is queued until the next deck browser render. That includes deck cleanup when a deck becomes ignored, and scan resets when a deck is unignored or when interval/tag rules change.
 -   **Example**:
 
     ```json
@@ -67,17 +66,3 @@
     -   `true`: Logging is enabled. You can view the logs by accessing the `log.txt` file via the 'View files' option of the addon.
     -   `false`: Logging is disabled.
 -   **Example**: `"debug": false`
-
-## When config changes are applied
-
--   Runtime config caches update as soon as the config is saved.
--   Batch side effects are deferred to the next deck browser render.
--   Ignoring a deck queues its add-on-managed cards for unsuspend cleanup.
--   Unignoring a deck, changing an interval, or changing tag rules queues a fresh browser scan.
--   Sync completion queues the unmanaged-note follow-up pass for the browser.
-
-## Suspension lifecycle
-
-- SibPush marks addon-managed suspended notes with the `SibPush_suspended` tag.
-- On the next deck browser render, SibPush checks tagged notes again and unsuspends the addon-managed cards whose remaining siblings are mature.
-- Manually suspended cards are left alone by SibPush.
