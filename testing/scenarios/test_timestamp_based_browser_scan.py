@@ -238,6 +238,75 @@ def test_browser_render_clears_stale_sync_watermark_after_scan() -> None:
             )
 
 
+def test_browser_render_skips_the_immediate_followup_render_after_scan() -> None:
+    """A scan should suppress exactly one browser refresh that immediately follows it.
+
+    That follow-up render is usually the browser redrawing after the scan modified the collection.
+    Dropping it once keeps the browser from launching a second pass back-to-back.
+    """
+
+    with temporary_collection() as col:
+        with patched_addon_state(col) as patched_addon:
+            addon = patched_addon
+            hooks_module = import_module(f"{addon.__name__}.sibpush.hooks")
+            state_module = import_module(f"{addon.__name__}.sibpush.state")
+
+            state_module.sync_last_processed_mod_ts(400)
+            state_module.queue_pending_browser_work(reset_processing_state=True)
+            state_module.save_persistent_state(col)
+
+            browser = SimpleNamespace(mw=SimpleNamespace(col=col))
+            events: list[str] = []
+
+            def fake_single_shot(delay_ms: int, callback: object) -> None:
+                if delay_ms != 2000:
+                    raise AssertionError(f"unexpected timer delay: {delay_ms}")
+
+                events.append("schedule-scan")
+                events.append("schedule-callback")
+                scheduled_callback["callback"] = callback
+
+            scheduled_callback: dict[str, object] = {}
+
+            def fake_process_modified_notes(
+                col_arg: object,
+                modified_since: int,
+                on_complete: object | None = None,
+                on_success: object | None = None,
+            ) -> None:
+                events.append(f"scan:{modified_since}")
+                if callable(on_success):
+                    on_success()
+                if callable(on_complete):
+                    on_complete()
+
+            with patch.object(hooks_module.QTimer, "singleShot", side_effect=fake_single_shot), patch.object(
+                hooks_module, "process_modified_notes", side_effect=fake_process_modified_notes
+            ), patch.object(hooks_module, "show_processing_finished_tooltip"):
+                hooks_module.browser_render(browser)
+
+                assert events == ["schedule-scan", "schedule-callback"]
+                assert callable(scheduled_callback["callback"])
+
+                scheduled_callback["callback"]()
+
+                assert events == ["schedule-scan", "schedule-callback", "scan:0"]
+
+                hooks_module.browser_render(browser)
+
+                assert events == ["schedule-scan", "schedule-callback", "scan:0"]
+
+                hooks_module.browser_render(browser)
+
+                assert events == ["schedule-scan", "schedule-callback", "scan:0", "schedule-scan", "schedule-callback"]
+
+            assert state_module.get_pending_browser_work() == {
+                "pending_unsuspend_deck_ids": [],
+                "pending_processing_state_reset": False,
+                "pending_unmanaged_refresh": False,
+            }
+
+
 def test_process_modified_notes_persists_the_processed_watermark() -> None:
     """The browser scan helper should persist the scan-start watermark after it runs."""
 
@@ -296,5 +365,6 @@ if __name__ == "__main__":
     test_browser_render_applies_queued_browser_work_before_scanning()
     test_browser_render_runs_unmanaged_refresh_after_partial_scan()
     test_browser_render_clears_stale_sync_watermark_after_scan()
+    test_browser_render_skips_the_immediate_followup_render_after_scan()
     test_process_modified_notes_persists_the_processed_watermark()
     test_sync_did_finish_persists_the_sync_watermark()

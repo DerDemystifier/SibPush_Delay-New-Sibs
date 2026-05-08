@@ -17,8 +17,8 @@ from ..state import SUSPENDED_BY_ADDON_TAG
 from .query import get_deck_rule
 
 DECK_UNSUSPEND_BATCH_SIZE = 1000
-DECK_UNSUSPEND_BATCH_PAUSE_MS = 500
-DECK_UNSUSPEND_TOOLTIP_PERIOD_MS = 1500
+DECK_UNSUSPEND_BATCH_PAUSE_MS = 100
+DECK_UNSUSPEND_TOOLTIP_PERIOD_MS = 2000
 
 
 def _get_variable_chunk_size(batch_size: int) -> int:
