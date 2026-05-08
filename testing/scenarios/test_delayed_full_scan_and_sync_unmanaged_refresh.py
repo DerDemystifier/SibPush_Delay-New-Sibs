@@ -132,6 +132,45 @@ def test_sync_finish_processes_only_unmanaged_new_notes() -> None:
         assert col.get_note(new_note.id).has_tag(addon.SUSPENDED_BY_ADDON_TAG)
 
 
+def test_collection_will_temporarily_close_queues_a_full_reset() -> None:
+    """Temporary collection closure should queue a full browser reprocessing pass.
+
+    One-way syncs and collection imports/exports can rewrite `mod` timestamps or revert cards
+    back to an earlier state. Queueing a full reset here ensures the next browser render ignores
+    the stale timestamp window and rescans the collection from scratch.
+    """
+
+    with temporary_collection() as col:
+        with patched_addon_state(col) as patched_addon:
+            addon = patched_addon
+            hooks_module = import_module(f"{addon.__name__}.sibpush.hooks")
+            state_module = import_module(f"{addon.__name__}.sibpush.state")
+            state_file = state_module.get_state_file_path(col)
+
+            assert state_file is not None
+
+            state_module.sync_last_processed_mod_ts(123)
+            state_module.sync_last_sync_mod_ts(456)
+            state_module.queue_pending_browser_work(refresh_unmanaged_notes=True)
+            state_module.save_persistent_state(col)
+
+            hooks_module.collection_will_temporarily_close(col)
+
+            assert state_module.get_last_processed_mod_ts() == 123
+            assert state_module.get_last_sync_mod_ts() == 456
+            assert state_module.get_pending_browser_work() == {
+                "pending_unsuspend_deck_ids": [],
+                "pending_processing_state_reset": True,
+                "pending_unmanaged_refresh": False,
+            }
+            assert state_file.read_text(encoding="utf-8") == (
+                '{"last_processed_mod_ts":123,"last_sync_mod_ts":456,'
+                '"pending_browser_work":{"pending_processing_state_reset":true,'
+                '"pending_unmanaged_refresh":false,"pending_unsuspend_deck_ids":[]}}'
+            )
+
+
 if __name__ == "__main__":
     test_browser_render_delays_the_initial_full_scan()
     test_sync_finish_processes_only_unmanaged_new_notes()
+    test_collection_will_temporarily_close_queues_a_full_reset()
