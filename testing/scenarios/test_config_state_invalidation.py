@@ -32,7 +32,7 @@ def test_ignoring_a_deck_keeps_persistent_state() -> None:
     with temporary_collection() as col:
         fake_manager = FakeAddonManager(
             {
-                "default_interval": 21,
+                "default_interval": 30,
                 "custom_deck_rules": [],
                 "tag_rules": {},
                 "debug": False,
@@ -85,7 +85,7 @@ def test_changing_interval_resets_persistent_state() -> None:
     with temporary_collection() as col:
         fake_manager = FakeAddonManager(
             {
-                "default_interval": 21,
+                "default_interval": 30,
                 "custom_deck_rules": [],
                 "tag_rules": {},
                 "debug": False,
@@ -138,7 +138,7 @@ def test_changing_tag_rules_resets_persistent_state() -> None:
     with temporary_collection() as col:
         fake_manager = FakeAddonManager(
             {
-                "default_interval": 21,
+                "default_interval": 30,
                 "custom_deck_rules": [],
                 "tag_rules": {},
                 "debug": False,
@@ -155,7 +155,7 @@ def test_changing_tag_rules_resets_persistent_state() -> None:
             config_text = json.dumps(
                 {
                     "debug": False,
-                    "default_interval": 21,
+                    "default_interval": 30,
                     "custom_deck_rules": [],
                     "tag_rules": {"topic": {"interval": 0}},
                 }
@@ -189,7 +189,7 @@ def test_unignoring_a_deck_resets_persistent_state() -> None:
     with temporary_collection() as col:
         fake_manager = FakeAddonManager(
             {
-                "default_interval": 21,
+                "default_interval": 30,
                 "custom_deck_rules": [],
                 "tag_rules": {},
                 "debug": False,

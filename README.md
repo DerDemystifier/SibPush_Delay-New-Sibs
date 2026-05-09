@@ -18,7 +18,7 @@ Unlike other similar addons that only act when a note is reviewed in AnkiDesktop
 
 The configuration of SibPush is straightforward and can be tailored to meet your study needs. Here are the settings you can tweak in the config file:
 
--   `default_interval`: The interval (in days) that must be surpassed by all siblings before new cards are introduced for review. Decks that are not listed in `custom_deck_rules` use this value. Default is `21`.
+-   `default_interval`: The interval (in days) that must be surpassed by all siblings before new cards are introduced for review. Decks that are not listed in `custom_deck_rules` use this value. Default is `30`.
 
 -   `custom_deck_rules`: A list of deck-specific rules. Each rule uses the deck ID (`did`) as the stable identifier, while `name` is only there to make the config easier to read. Set `ignored` to `true` to exclude a deck from the SibPush mechanism. Use `interval` to override the maturity threshold for that specific deck.
 

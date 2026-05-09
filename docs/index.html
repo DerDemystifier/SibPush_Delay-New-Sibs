@@ -29,7 +29,7 @@
 <h2 id="configuration"><a class="header-link" href="#configuration"></a>Configuration</h2>
 <p>The configuration of SibPush is straightforward and can be tailored to meet your study needs. Here are the settings you can tweak in the config file:</p>
 <ul class="list">
-<li><p>  <code>default_interval</code>: The interval (in days) that must be surpassed by all siblings before new cards are introduced for review. Decks that are not listed in <code>custom_deck_rules</code> use this value. Default is <code>21</code>.</p>
+<li><p>  <code>default_interval</code>: The interval (in days) that must be surpassed by all siblings before new cards are introduced for review. Decks that are not listed in <code>custom_deck_rules</code> use this value. Default is <code>30</code>.</p>
 </li>
 <li><p><code>custom_deck_rules</code>: A list of deck-specific rules. Each rule uses the deck ID (<code>did</code>) as the stable identifier, while <code>name</code> is only there to make the config easier to read. Set <code>ignored</code> to <code>true</code> to exclude a deck from the SibPush mechanism. Use <code>interval</code> to override the maturity threshold for that specific deck.</p>
 <p>  You can manage the current deck&#39;s SibPush rule from the deck browser&#39;s <code>SibPush</code> submenu instead of editing JSON by hand.</p>

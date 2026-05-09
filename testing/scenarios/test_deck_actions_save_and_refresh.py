@@ -32,7 +32,7 @@ def test_update_custom_deck_rule_unsuspends_cards_when_deck_becomes_ignored() ->
         deck_id = make_test_deck_id(col)
         fake_manager = FakeAddonManager(
             {
-                "default_interval": 21,
+                "default_interval": 30,
                 "custom_deck_rules": [],
                 "tag_rules": {},
                 "debug": False,
@@ -93,7 +93,7 @@ def test_update_custom_deck_rule_unsuspends_cards_when_deck_becomes_ignored() ->
         assert profile_config["custom_deck_rules"][0]["ignored"] is True
         assert profile_config["custom_deck_rules"][0]["did"] == str(deck_id)
         assert fake_manager.config == {
-            "default_interval": 21,
+            "default_interval": 30,
             "custom_deck_rules": [],
             "tag_rules": {},
             "debug": False,

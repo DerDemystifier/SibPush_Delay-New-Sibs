@@ -18,7 +18,7 @@ from .query import get_deck_rule
 
 DECK_UNSUSPEND_BATCH_SIZE = 1000
 DECK_UNSUSPEND_BATCH_PAUSE_MS = 100
-DECK_UNSUSPEND_TOOLTIP_PERIOD_MS = 2000
+DECK_UNSUSPEND_TOOLTIP_PERIOD_MS = 3000
 
 
 def _get_variable_chunk_size(batch_size: int) -> int:

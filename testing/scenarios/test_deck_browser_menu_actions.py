@@ -58,7 +58,7 @@ def test_deck_browser_submenu_toggles_ignore_and_sets_interval() -> None:
         deck_id = make_test_deck_id(col)
         fake_manager = FakeAddonManager(
             {
-                "default_interval": 21,
+                "default_interval": 30,
                 "custom_deck_rules": [],
                 "tag_rules": {},
                 "debug": False,
@@ -97,7 +97,7 @@ def test_deck_browser_submenu_toggles_ignore_and_sets_interval() -> None:
             assert profile_config["custom_deck_rules"][0]["interval"] == 33
             assert profile_config["custom_deck_rules"][0]["ignored"] is True
             assert fake_manager.config == {
-                "default_interval": 21,
+                "default_interval": 30,
                 "custom_deck_rules": [],
                 "tag_rules": {},
                 "debug": False,

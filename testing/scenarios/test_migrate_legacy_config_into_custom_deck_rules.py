@@ -28,12 +28,14 @@ def test_migrates_legacy_config_into_custom_deck_rules() -> None:
         {"Ignored deck": "1777739665454"},
     )
 
+    print(migrated)
+
     print(
         "After migration, the config should expose default_interval plus explicit ignored deck rules keyed by deck ID."
     )
 
     assert migrated == {
-        "default_interval": 21,
+        "default_interval": 30,
         "custom_deck_rules": [
             {
                 "did": "1777739665453",
