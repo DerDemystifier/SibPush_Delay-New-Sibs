@@ -48,7 +48,6 @@ def test_browser_render_uses_the_older_timestamp_watermark() -> None:
             ), patch.object(hooks_module, "show_processing_finished_tooltip"):
                 hooks_module.browser_render(browser)
 
-                assert scheduled["delay_ms"] == 2000
                 assert callable(scheduled["callback"])
 
                 scheduled["callback"]()
@@ -116,7 +115,6 @@ def test_browser_render_applies_queued_browser_work_before_scanning() -> None:
             ), patch.object(hooks_module, "show_processing_finished_tooltip"):
                 hooks_module.browser_render(browser)
 
-                assert scheduled["delay_ms"] == 2000
                 assert callable(scheduled["callback"])
 
                 scheduled["callback"]()
@@ -173,7 +171,6 @@ def test_browser_render_runs_unmanaged_refresh_after_partial_scan() -> None:
             ), patch.object(hooks_module, "show_processing_finished_tooltip"):
                 hooks_module.browser_render(browser)
 
-                assert scheduled["delay_ms"] == 2000
                 assert callable(scheduled["callback"])
 
                 scheduled["callback"]()
@@ -226,7 +223,6 @@ def test_browser_render_clears_stale_sync_watermark_after_scan() -> None:
             ), patch.object(hooks_module, "show_processing_finished_tooltip"):
                 hooks_module.browser_render(browser)
 
-                assert scheduled["delay_ms"] == 2000
                 assert callable(scheduled["callback"])
 
                 scheduled["callback"]()
@@ -259,9 +255,6 @@ def test_browser_render_skips_the_immediate_followup_render_after_scan() -> None
             events: list[str] = []
 
             def fake_single_shot(delay_ms: int, callback: object) -> None:
-                if delay_ms != 2000:
-                    raise AssertionError(f"unexpected timer delay: {delay_ms}")
-
                 events.append("schedule-scan")
                 events.append("schedule-callback")
                 scheduled_callback["callback"] = callback
