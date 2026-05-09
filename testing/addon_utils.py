@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 
 # Default interval used for testing immature sibling logic
-TEST_INTERVAL = 21
+TEST_INTERVAL = 30
 
 
 class AddonModule(Protocol):
@@ -168,7 +168,7 @@ def patched_addon_state(
     This context manager:
     1. Swaps the shared `mw` handle for the provided test collection.
     2. Resets internal state caches (`last_full_scan_date` and `last_unmanaged_note_ids`).
-    3. Configures test-specific settings (`default_interval=21`, no custom deck rules).
+    3. Configures test-specific settings (`default_interval=30`, no custom deck rules).
     4. Restores original state on exit.
     """
     addon = load_addon_module()

@@ -1,5 +1,5 @@
 {
-    "default_interval": 21,
+    "default_interval": 30,
     "custom_deck_rules": [],
     "tag_rules": {
         "SibPush-ignored": {

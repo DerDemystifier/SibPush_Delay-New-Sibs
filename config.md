@@ -4,7 +4,7 @@
 
 -   **Type**: Integer
 -   **Description**: Defines the interval (in days) required for a card to be considered "matured". Decks that are not listed in `custom_deck_rules` use this value.
--   **Example**: `"default_interval": 21`
+-   **Example**: `"default_interval": 30` means that cards with an interval of 30 days or more are considered matured by default.
 
 ## `custom_deck_rules`
 

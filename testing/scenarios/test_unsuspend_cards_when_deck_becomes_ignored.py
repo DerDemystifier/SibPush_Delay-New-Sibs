@@ -68,7 +68,7 @@ def test_on_config_save_unsuspends_addon_cards_for_newly_ignored_deck() -> None:
             config_text = json.dumps(
                 {
                     "debug": False,
-                    "default_interval": 21,
+                    "default_interval": 30,
                     "custom_deck_rules": [ignored_rule],
                     "tag_rules": {},
                 }

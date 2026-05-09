@@ -45,8 +45,9 @@ def _build_migrated_config(
 
     lookup = deck_lookup or {}
     migrated_rules: list[dict[str, Any]] = []
-    default_interval = parser._parse_int(
-        config.get("default_interval", config.get("interval", 21)), 21
+    default_interval = parser._parse_int(config.get("default_interval", 30), 30)
+    legacy_rule_interval = parser._parse_int(
+        config.get("interval", default_interval), default_interval
     )
 
     for deck_label in legacy_ignored_decks:
@@ -70,7 +71,9 @@ def _build_migrated_config(
 
     return {
         "default_interval": default_interval,
-        "custom_deck_rules": [{**rule, "interval": default_interval} for rule in migrated_rules],
+        "custom_deck_rules": [
+            {**rule, "interval": legacy_rule_interval} for rule in migrated_rules
+        ],
         "debug": bool(config.get("debug", False)),
     }
 

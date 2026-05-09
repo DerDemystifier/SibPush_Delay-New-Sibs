@@ -62,7 +62,7 @@ def test_addon_config_editor_displays_profile_config() -> None:
     with temporary_collection() as col:
         fake_manager = FakeAddonManager(
             {
-                "default_interval": 21,
+                "default_interval": 30,
                 "custom_deck_rules": [],
                 "tag_rules": {},
                 "debug": False,
@@ -84,7 +84,7 @@ def test_addon_config_editor_displays_profile_config() -> None:
 
             assert json.loads(displayed_text) == profile_config
             assert fake_manager.config == {
-                "default_interval": 21,
+                "default_interval": 30,
                 "custom_deck_rules": [],
                 "tag_rules": {},
                 "debug": False,
@@ -97,7 +97,7 @@ def test_addon_config_editor_leaves_other_addons_unchanged() -> None:
     with temporary_collection() as col:
         fake_manager = FakeAddonManager(
             {
-                "default_interval": 21,
+                "default_interval": 30,
                 "custom_deck_rules": [],
                 "tag_rules": {},
                 "debug": False,
@@ -131,13 +131,13 @@ def test_collection_load_refreshes_menu_state_from_profile_config() -> None:
         "debug": True,
     }
     meta_config = {
-        "default_interval": 21,
+        "default_interval": 30,
         "custom_deck_rules": [
             {
                 "did": deck_id,
                 "name": "Meta deck",
                 "ignored": True,
-                "interval": 21,
+                "interval": 30,
             }
         ],
         "tag_rules": {},
@@ -178,13 +178,13 @@ def test_collection_load_does_not_fall_back_to_meta_config() -> None:
     """Runtime config should ignore meta.json when the profile-local file is absent."""
 
     meta_config = {
-        "default_interval": 21,
+        "default_interval": 30,
         "custom_deck_rules": [
             {
                 "did": "1777739665453",
                 "name": "Meta deck",
                 "ignored": True,
-                "interval": 21,
+                "interval": 30,
             }
         ],
         "tag_rules": {},
@@ -226,7 +226,7 @@ def test_collection_load_does_not_queue_a_startup_reset_from_profile_config() ->
     with temporary_collection() as col:
         fake_manager = FakeAddonManager(
             {
-                "default_interval": 21,
+                "default_interval": 30,
                 "custom_deck_rules": [],
                 "tag_rules": {},
                 "debug": False,

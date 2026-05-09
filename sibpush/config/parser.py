@@ -224,7 +224,7 @@ def _parse_custom_deck_rules(config: dict[str, Any] | None) -> list[dict[str, An
     if config is None:
         return []
 
-    default_interval = _parse_int(config.get("default_interval", 21), 21)
+    default_interval = _parse_int(config.get("default_interval", 30), 30)
     raw_rules = config.get("custom_deck_rules")
     if isinstance(raw_rules, list):
         typed_rules = cast(list[object], raw_rules)
@@ -276,7 +276,7 @@ def _extract_custom_deck_rule_effects(
 ) -> dict[str, tuple[bool, int]]:
     """Return the effective ignore/interval state for each explicitly configured deck."""
 
-    default_interval = _parse_int(config_settings.get("default_interval", 21), 21)
+    default_interval = _parse_int(config_settings.get("default_interval", 30), 30)
     raw_rules = config_settings.get("custom_deck_rules")
     if not isinstance(raw_rules, list):
         return {}
@@ -314,8 +314,8 @@ def _should_invalidate_processing_state(
     Ignoring a deck is intentionally excluded because that path only queues deck cleanup.
     """
 
-    previous_default_interval = _parse_int(previous_config_settings.get("default_interval", 21), 21)
-    current_default_interval = _parse_int(current_config_settings.get("default_interval", 21), 21)
+    previous_default_interval = _parse_int(previous_config_settings.get("default_interval", 30), 30)
+    current_default_interval = _parse_int(current_config_settings.get("default_interval", 30), 30)
     if previous_default_interval != current_default_interval:
         return True
 
@@ -384,7 +384,7 @@ def get_custom_deck_rule_snapshot(deck_id: str) -> dict[str, Any]:
     """
 
     rule = get_custom_deck_rule(deck_id) or {}
-    default_interval = _parse_int(config_settings.get("default_interval", 21), 21)
+    default_interval = _parse_int(config_settings.get("default_interval", 30), 30)
     return {
         "did": str(deck_id).strip(),
         "name": str(rule.get("name", "")).strip(),
@@ -418,7 +418,7 @@ def _prepare_custom_deck_rule(
         raise ValueError("deck_id cannot be empty")
 
     normalized_deck_name = str(deck_name).strip() or normalized_deck_id
-    default_interval = _parse_int(config.get("default_interval", 21), 21)
+    default_interval = _parse_int(config.get("default_interval", 30), 30)
     custom_deck_rules = cast(list[dict[str, Any]], config.setdefault("custom_deck_rules", []))
 
     rule: dict[str, Any] | None = next(
@@ -602,7 +602,7 @@ def _parse_tag_rules(config: dict[str, Any] | None) -> dict[str, dict[str, Any]]
     if config is None:
         return {}
 
-    default_interval = _parse_int(config.get("default_interval", 21), 21)
+    default_interval = _parse_int(config.get("default_interval", 30), 30)
     raw_rules = config.get("tag_rules")
     if not isinstance(raw_rules, dict):
         return {}
@@ -637,7 +637,7 @@ def parse_config(
 
     debug = bool(config["debug"]) if config is not None else False
     default_interval = (
-        _parse_int(config.get("default_interval", 21), 21) if config is not None else 21
+        _parse_int(config.get("default_interval", 30), 30) if config is not None else 30
     )
     custom_deck_rules = _parse_custom_deck_rules(config)
     tag_rules = _parse_tag_rules(config)
