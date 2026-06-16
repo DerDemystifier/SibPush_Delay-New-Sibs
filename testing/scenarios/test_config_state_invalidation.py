@@ -67,6 +67,7 @@ def test_ignoring_a_deck_keeps_persistent_state() -> None:
                 "pending_unmanaged_refresh": False,
             }
             assert _read_state_file(state_module, col) == {
+                "addon_version": state_module.ADDON_VERSION,
                 "last_processed_mod_ts": 123,
                 "last_sync_mod_ts": 456,
                 "pending_browser_work": {
@@ -120,6 +121,7 @@ def test_changing_interval_resets_persistent_state() -> None:
                 "pending_unmanaged_refresh": False,
             }
             assert _read_state_file(state_module, col) == {
+                "addon_version": state_module.ADDON_VERSION,
                 "last_processed_mod_ts": 123,
                 "last_sync_mod_ts": 456,
                 "pending_browser_work": {
@@ -171,6 +173,7 @@ def test_changing_tag_rules_resets_persistent_state() -> None:
                 "pending_unmanaged_refresh": False,
             }
             assert _read_state_file(state_module, col) == {
+                "addon_version": state_module.ADDON_VERSION,
                 "last_processed_mod_ts": 123,
                 "last_sync_mod_ts": 456,
                 "pending_browser_work": {
@@ -227,6 +230,7 @@ def test_unignoring_a_deck_resets_persistent_state() -> None:
                 "pending_unmanaged_refresh": False,
             }
             assert _read_state_file(state_module, col) == {
+                "addon_version": state_module.ADDON_VERSION,
                 "last_processed_mod_ts": 123,
                 "last_sync_mod_ts": 456,
                 "pending_browser_work": {

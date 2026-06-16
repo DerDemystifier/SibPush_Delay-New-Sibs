@@ -27,6 +27,8 @@ def test_state_file_round_trips_and_reset_clears_memory() -> None:
             assert loaded_state == {"last_processed_mod_ts": 0, "last_sync_mod_ts": None}
             assert state_module.get_last_processed_mod_ts() == 0
             assert state_module.get_last_sync_mod_ts() is None
+            assert state_module.installed_version is None
+            assert state_module.needs_breaking_change_recovery() is True
             assert state_module.get_pending_browser_work() == {
                 "pending_unsuspend_deck_ids": [],
                 "pending_processing_state_reset": False,
@@ -45,6 +47,7 @@ def test_state_file_round_trips_and_reset_clears_memory() -> None:
             assert saved_state == {"last_processed_mod_ts": 123, "last_sync_mod_ts": 456}
             assert state_file.exists()
             assert json.loads(state_file.read_text(encoding="utf-8")) == {
+                "addon_version": state_module.ADDON_VERSION,
                 "last_processed_mod_ts": 123,
                 "last_sync_mod_ts": 456,
                 "pending_browser_work": {
@@ -63,6 +66,8 @@ def test_state_file_round_trips_and_reset_clears_memory() -> None:
             reloaded_state = state_module.load_persistent_state(col)
 
             assert reloaded_state == {"last_processed_mod_ts": 123, "last_sync_mod_ts": 456}
+            assert state_module.installed_version == state_module.ADDON_VERSION
+            assert state_module.needs_breaking_change_recovery() is False
             assert state_module.get_pending_browser_work() == {
                 "pending_unsuspend_deck_ids": ["1777739665453", "1777739665454"],
                 "pending_processing_state_reset": True,
@@ -72,11 +77,14 @@ def test_state_file_round_trips_and_reset_clears_memory() -> None:
             reset_state = state_module.reset_persistent_state(col)
 
             assert reset_state == {"last_processed_mod_ts": 0, "last_sync_mod_ts": None}
-            assert json.loads(state_file.read_text(encoding="utf-8")) == {}
+            assert json.loads(state_file.read_text(encoding="utf-8")) == {
+                "addon_version": state_module.ADDON_VERSION,
+            }
             assert state_module.get_last_processed_mod_ts() == 0
             assert state_module.get_last_sync_mod_ts() is None
             assert state_module.get_last_full_scan_date() is None
             assert state_module.get_last_unmanaged_note_ids() is None
+            assert state_module.installed_version is None
             assert state_module.get_pending_browser_work() == {
                 "pending_unsuspend_deck_ids": [],
                 "pending_processing_state_reset": False,

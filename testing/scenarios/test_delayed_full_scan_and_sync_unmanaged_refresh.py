@@ -49,7 +49,7 @@ def test_browser_render_delays_the_initial_full_scan() -> None:
             with patch.object(hooks_module.QTimer, "singleShot", side_effect=fake_single_shot):
                 hooks_module.browser_render(browser)
 
-            assert scheduled["delay_ms"] == 2000
+            assert scheduled["delay_ms"] == 500
             assert callable(scheduled["callback"])
             assert_card_is_not_addon_owned(col, cards[0])
             assert_card_is_not_addon_owned(col, cards[1])
@@ -186,7 +186,7 @@ def test_collection_did_temporarily_close_queues_a_full_reset() -> None:
                 "pending_unmanaged_refresh": False,
             }
             assert state_file.read_text(encoding="utf-8") == (
-                '{"last_processed_mod_ts":123,"last_sync_mod_ts":456,'
+                f'{{"addon_version":"{state_module.ADDON_VERSION}","last_processed_mod_ts":123,"last_sync_mod_ts":456,'
                 '"pending_browser_work":{"pending_processing_state_reset":true,'
                 '"pending_unmanaged_refresh":false,"pending_unsuspend_deck_ids":[]}}'
             )

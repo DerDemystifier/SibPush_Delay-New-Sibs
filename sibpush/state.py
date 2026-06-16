@@ -70,9 +70,14 @@ _pending_browser_work = _default_pending_browser_work()
 
 ADDON_CUSTOM_DATA_KEY = "sibpush"
 ADDON_CUSTOM_DATA_VALUE = "suspended"
+ADDON_VERSION = "2.0.0"  # Update this when releasing a new version
+BREAKING_CHANGE_VERSION = "2.0.0"  # Set this equal ADDON_VERSION if the release includes breaking changes that require the recovery flow to run.
+VERSION_KEY = "addon_version"
 STATE_FILENAME = "sibpush_state.json"
 CONFIG_FILENAME = "sibpush_config.json"
 _persistent_state_loaded = False
+
+installed_version: str | None = None  # The last installed version of the add-on, loaded from the state file. This is used to determine if the breaking-change recovery flow needs to run.
 
 
 def get_mw() -> Any:
@@ -152,6 +157,22 @@ def _normalize_timestamp(value: Any) -> int | None:
         return None
 
     return timestamp if timestamp >= 0 else None
+
+
+def _parse_version(value: str | None) -> tuple[int, ...] | None:
+    """Parse a dotted version string into a tuple of integers."""
+
+    if not isinstance(value, str):
+        return None
+
+    normalized = value.strip()
+    if not normalized:
+        return None
+
+    try:
+        return tuple(int(part) for part in normalized.split("."))
+    except ValueError:
+        return None
 
 
 def _normalize_deck_id(value: Any) -> str | None:
@@ -297,6 +318,20 @@ def get_last_sync_mod_ts() -> int | None:
     """Return the last sync modification timestamp, if one exists."""
 
     return last_sync_mod_ts
+
+
+def needs_breaking_change_recovery() -> bool:
+    """Return whether the collection needs the breaking-change recovery flow."""
+
+    current_version = _parse_version(installed_version)
+    breaking_change_version = _parse_version(BREAKING_CHANGE_VERSION)
+    if current_version is None or breaking_change_version is None:
+        return True
+
+    # If the currently installed version is older than the breaking change version, then we need to run the recovery flow when upgrading to the new version. Otherwise, if the currently installed version is the same or newer than the breaking change version, then we can assume the recovery flow has already been run (or is not needed) and skip it.
+    return (
+        current_version < breaking_change_version
+    )
 
 
 def clear_stale_sync_mod_ts() -> bool:
@@ -517,7 +552,7 @@ def save_persistent_state(col: Any | None = None) -> dict[str, int | None]:
     if state_file is None:
         return get_persistent_state()
 
-    payload: dict[str, Any] = {}
+    payload: dict[str, Any] = {VERSION_KEY: ADDON_VERSION}
     if last_processed_mod_ts is not None:
         payload["last_processed_mod_ts"] = last_processed_mod_ts
     if last_sync_mod_ts is not None:
@@ -546,18 +581,24 @@ def reset_persistent_state(col: Any | None = None) -> dict[str, int | None]:
     """
 
     global last_full_scan_date, last_unmanaged_note_ids, last_processed_mod_ts, last_sync_mod_ts
+    global installed_version
     global _persistent_state_loaded
 
     last_full_scan_date = None
     last_unmanaged_note_ids = None
     last_processed_mod_ts = None
     last_sync_mod_ts = None
+    installed_version = None
     _persistent_state_loaded = True
     clear_pending_browser_work()
 
     state_file = get_state_file_path(col)
     if state_file is not None:
-        _write_state_payload(state_file, {})
+        payload = _read_state_payload(state_file) if state_file.exists() else {}
+        payload.pop("last_processed_mod_ts", None)
+        payload.pop("last_sync_mod_ts", None)
+        payload.pop(PENDING_BROWSER_WORK_KEY, None)
+        _write_state_payload(state_file, payload)
 
     return get_persistent_state()
 
@@ -569,10 +610,14 @@ def _apply_state_payload(payload: dict[str, Any]) -> None:
     empty browser-work payload and safely loaded.
     """
 
-    global last_processed_mod_ts, last_sync_mod_ts, _persistent_state_loaded
+    global last_processed_mod_ts, last_sync_mod_ts, installed_version, _persistent_state_loaded
 
     last_processed_mod_ts = _normalize_timestamp(payload.get("last_processed_mod_ts"))
     last_sync_mod_ts = _normalize_timestamp(payload.get("last_sync_mod_ts"))
+    version_value = payload.get(VERSION_KEY)
+    installed_version = (
+        version_value.strip() if isinstance(version_value, str) and version_value.strip() else None
+    )
     sync_pending_browser_work(
         _normalize_pending_browser_work(payload.get(PENDING_BROWSER_WORK_KEY))
     )

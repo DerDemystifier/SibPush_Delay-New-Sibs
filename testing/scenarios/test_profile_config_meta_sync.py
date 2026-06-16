@@ -283,6 +283,7 @@ def test_collection_load_does_not_queue_a_startup_reset_from_profile_config() ->
             assert captured["col"] is col
             assert captured["modified_since"] == 123
             assert json.loads(state_file.read_text(encoding="utf-8")) == {
+                "addon_version": state_module.ADDON_VERSION,
                 "last_processed_mod_ts": 123,
                 "last_sync_mod_ts": 456,
             }
