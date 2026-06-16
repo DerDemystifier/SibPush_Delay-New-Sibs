@@ -19,6 +19,7 @@ class CardSnapshot:
     due: int
     did: int
     flags: int
+    custom_data: str
 
 
 def capture_snapshots(cards: Sequence[Card]) -> list[CardSnapshot]:
@@ -40,6 +41,7 @@ def capture_snapshots(cards: Sequence[Card]) -> list[CardSnapshot]:
             due=card.due,
             did=card.did,
             flags=card.flags,
+            custom_data=getattr(card, "custom_data", "") or "",
         )
         for card in cards
     ]

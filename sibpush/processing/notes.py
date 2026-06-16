@@ -18,13 +18,7 @@ from ..cards.classification import classify_cards
 from ..cards.formatting import capture_snapshots, format_note_change
 from ..config.parser import config_settings
 from ..logging_support import logThis
-from ..state import (
-    SUSPENDED_BY_ADDON_TAG,
-    save_persistent_state,
-    sync_last_full_scan_date,
-    sync_last_processed_mod_ts,
-    sync_last_unmanaged_note_ids,
-)
+from ..state import save_persistent_state, sync_last_full_scan_date, sync_last_processed_mod_ts, sync_last_unmanaged_note_ids
 from .query import (
     get_all_child_cards_batch,
     get_child_cards,
@@ -34,8 +28,9 @@ from .query import (
     should_run_unmanaged_notes,
 )
 from .suspension import (
+    _clear_addon_custom_data,
+    card_is_addon_owned,
     note_is_ignored_deck,
-    remove_suspension_tag_if_no_suspended_cards,
     suspend_cards,
 )
 
@@ -154,61 +149,82 @@ def process_note(
             # No new cards left to process - all cards are mature or learning
             return
 
-        has_addon_tag = note.has_tag(SUSPENDED_BY_ADDON_TAG)
-
-        # SUB-BRANCH B1: Note was previously managed by addon (has suspension tag)
-        # This means some siblings were suspended earlier and may now be ready
         first_new_card = all_new_cards[0]
+        note_is_managed = any(card_is_addon_owned(card) for card in all_new_cards)
+        first_card_is_addon_owned = card_is_addon_owned(first_new_card)
+        first_card_is_suspended = first_new_card.queue == QUEUE_TYPE_SUSPENDED
+        promoted_card: Card | None = None
+        new_cards_to_suspend: list[Card] = []
 
-        if has_addon_tag and first_new_card.queue == QUEUE_TYPE_SUSPENDED:
-            # The first new card is suspended - unsuspend it to make it available
-            col.sched.unsuspend_cards([first_new_card.id])
-            changed = True
+        if first_card_is_addon_owned:
+            if first_card_is_suspended:
+                col.sched.unsuspend_cards([first_new_card.id])
+                _clear_addon_custom_data(col, first_new_card)
+                promoted_card = first_new_card
+                changed = True
+                action_taken = "Unsuspend the first new card"
+            else:
+                if _clear_addon_custom_data(col, first_new_card):
+                    changed = True
+                promoted_card = first_new_card
+                action_taken = "Clear the first new card marker"
+        elif first_card_is_suspended:
+            promoted_card = next(
+                (
+                    card
+                    for card in all_new_cards[1:]
+                    if card_is_addon_owned(card) and card.queue == QUEUE_TYPE_SUSPENDED
+                ),
+                None,
+            )
+            if promoted_card is not None:
+                col.sched.unsuspend_cards([promoted_card.id])
+                _clear_addon_custom_data(col, promoted_card)
+                changed = True
+                action_taken = "Promote the first add-on-owned trailing card"
 
-        # Get the trailing new cards (2nd, 3rd, etc.) that should stay suspended
-        new_cards_to_suspend = [
-            card for card in all_new_cards[1:] if card.queue != QUEUE_TYPE_SUSPENDED
-        ]
+        for card in all_new_cards[1:]:
+            card_is_owned = card_is_addon_owned(card)
+            card_is_suspended = card.queue == QUEUE_TYPE_SUSPENDED
 
-        # SUB-BRANCH B2: Note not tagged and no trailing cards to suspend
-        # Nothing to do - this is a fresh note or already properly managed
-        if not has_addon_tag and not new_cards_to_suspend:
+            if card_is_owned and card_is_suspended:
+                continue
+
+            if card_is_owned and not card_is_suspended:
+                if _clear_addon_custom_data(col, card):
+                    changed = True
+                continue
+
+            if not card_is_suspended:
+                new_cards_to_suspend.append(card)
+
+        if not note_is_managed and not new_cards_to_suspend and promoted_card is None:
             return
 
-        # SUB-BRANCH B3: Coming from reviewer hook - special handling
-        # The user just reviewed a card, so bury the next new card for tomorrow
-        # to prevent immediate review of siblings
-        if coming_from_reviewer_hook and first_new_card.queue != QUEUE_TYPE_SIBLING_BURIED:
-            # Bury the first new card until tomorrow (auto-unbury).
-            # Skip the write if Anki already left the card buried for the day.
-            col.sched.bury_cards(ids=[first_new_card.id], manual=False)
-            changed = True
-
-        # Suspend any trailing new cards that aren't already suspended
         if new_cards_to_suspend:
             suspend_cards(col, new_cards_to_suspend, note_id)
             changed = True
 
-        # CLEANUP: Remove the addon tag if there are no suspended cards left
-        # This happens when all new siblings have been introduced
-        tag_removed = False
-        if not new_cards_to_suspend and has_addon_tag:
-            tag_removed = remove_suspension_tag_if_no_suspended_cards(col, note, note.cards())
-            changed = changed or tag_removed
+        bury_target: Card | None = None
+        if coming_from_reviewer_hook:
+            if promoted_card is not None and promoted_card.queue != QUEUE_TYPE_SIBLING_BURIED:
+                bury_target = promoted_card
+            elif not first_card_is_suspended and first_new_card.queue != QUEUE_TYPE_SIBLING_BURIED:
+                bury_target = first_new_card
 
-        # For logging purposes.
-        if has_addon_tag:
-            action_taken = "Unsuspend the first new card"
-            if coming_from_reviewer_hook:
-                action_taken = "Coming from reviewer hook: Unsuspend the first new card, then bury it for tomorrow"
-            if new_cards_to_suspend:
-                action_taken += f" and suspend {len(new_cards_to_suspend)} trailing new card(s)"
-            elif tag_removed:
-                action_taken += " and remove the stale suspension tag"
-        elif coming_from_reviewer_hook:
-            action_taken = f"Coming from reviewer hook: bury the first new card for tomorrow and suspend {len(new_cards_to_suspend)} trailing new card(s)"
-        else:
-            action_taken = f"Suspend {len(new_cards_to_suspend)} trailing new card(s)"
+        if bury_target is not None:
+            col.sched.bury_cards(ids=[bury_target.id], manual=False)
+            changed = True
+
+        action_bits: list[str] = []
+        if action_taken is not None:
+            action_bits.append(action_taken)
+        if coming_from_reviewer_hook and bury_target is not None:
+            action_bits.append("bury it for tomorrow")
+        if new_cards_to_suspend:
+            action_bits.append(f"suspend {len(new_cards_to_suspend)} trailing new card(s)")
+        if action_bits:
+            action_taken = "; ".join(action_bits)
 
     if debug_enabled and changed and action_taken:
         updated_siblings = sorted(get_child_cards(col, note_id), key=lambda card: card.due)

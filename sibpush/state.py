@@ -42,7 +42,7 @@ PENDING_PROCESSING_RESET_KEY = "pending_processing_state_reset"
 # PENDING_UNMANAGED_REFRESH_KEY:
 #   Boolean flag. When True, signals that after the next browser-driven scan, the add-on
 #   should run a lighter pass to revisit any new notes that are still unmanaged (i.e.,
-#   not yet tagged or processed by SibPush). This is usually queued after a sync event
+#   not yet owned or processed by SibPush). This is usually queued after a sync event
 #   when new notes are added outside the browser context.
 PENDING_UNMANAGED_REFRESH_KEY = "pending_unmanaged_refresh"
 # PENDING_BROWSER_WORK_KEY:
@@ -68,7 +68,8 @@ def _default_pending_browser_work() -> dict[str, Any]:
 
 _pending_browser_work = _default_pending_browser_work()
 
-SUSPENDED_BY_ADDON_TAG = "SibPush-suspended"
+ADDON_CUSTOM_DATA_KEY = "sibpush"
+ADDON_CUSTOM_DATA_VALUE = "suspended"
 STATE_FILENAME = "sibpush_state.json"
 CONFIG_FILENAME = "sibpush_config.json"
 _persistent_state_loaded = False

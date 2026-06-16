@@ -6,7 +6,12 @@ from importlib import import_module
 from anki.consts import QUEUE_TYPE_REV, QUEUE_TYPE_SUSPENDED
 
 from ..addon_utils import patched_addon_state
-from ..card_utils import assert_card_queues, set_review_card_state
+from ..card_utils import (
+    assert_card_is_addon_owned,
+    assert_card_is_not_addon_owned,
+    assert_card_queues,
+    set_review_card_state,
+)
 from ..collection_utils import temporary_collection
 from ..note_utils import add_note_with_siblings, build_test_notetype, make_test_deck_id
 from ..print_utils import print_collection_state
@@ -50,14 +55,16 @@ def test_on_config_save_unsuspends_addon_cards_for_newly_ignored_deck() -> None:
             patched_addon.process_all_notes(col)
 
             print(
-                "After processing, the add-on has suspended the new siblings and tagged the note as managed."
+                "After processing, the add-on has suspended the new siblings and marked the cards as addon-owned."
             )
             print_collection_state(col, "After processing (suspended by add-on)")
 
             assert_card_queues(
                 col, cards, [QUEUE_TYPE_REV, QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_SUSPENDED]
             )
-            assert col.get_note(note.id).has_tag(addon.SUSPENDED_BY_ADDON_TAG)
+            assert_card_is_not_addon_owned(col, cards[0])
+            assert_card_is_addon_owned(col, cards[1])
+            assert_card_is_addon_owned(col, cards[2])
 
             ignored_rule = {
                 "did": str(deck_id),
@@ -88,7 +95,9 @@ def test_on_config_save_unsuspends_addon_cards_for_newly_ignored_deck() -> None:
         print_collection_state(col, "After config save (cleanup queued, not yet run)")
 
         assert_card_queues(col, cards, [QUEUE_TYPE_REV, QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_SUSPENDED])
-        assert col.get_note(note.id).has_tag(addon.SUSPENDED_BY_ADDON_TAG)
+        assert_card_is_not_addon_owned(col, cards[0])
+        assert_card_is_addon_owned(col, cards[1])
+        assert_card_is_addon_owned(col, cards[2])
 
 
 if __name__ == "__main__":

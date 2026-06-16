@@ -2,8 +2,13 @@ from __future__ import annotations
 
 from anki.consts import QUEUE_TYPE_NEW, QUEUE_TYPE_REV, QUEUE_TYPE_SUSPENDED
 
-from ..addon_utils import load_addon_module, patched_addon_state
-from ..card_utils import assert_card_queues, set_review_card_state
+from ..addon_utils import patched_addon_state
+from ..card_utils import (
+    assert_card_is_addon_owned,
+    assert_card_is_not_addon_owned,
+    assert_card_queues,
+    set_review_card_state,
+)
 from ..collection_utils import temporary_collection
 from ..note_utils import add_note_with_siblings, build_test_notetype, make_test_deck_id
 from ..print_utils import print_collection_state
@@ -17,7 +22,6 @@ def test_tag_rule_takes_precedence_over_custom_deck_interval() -> None:
     untagged control note, demonstrating that tag-based precedence wins over deck-only defaults.
     """
     with temporary_collection() as col:
-        addon = load_addon_module()
         model = build_test_notetype(col)
 
         custom_deck_id = col.decks.id("Tagged Custom Deck")
@@ -67,8 +71,12 @@ def test_tag_rule_takes_precedence_over_custom_deck_interval() -> None:
         assert_card_queues(
             col, control_cards, [QUEUE_TYPE_REV, QUEUE_TYPE_NEW, QUEUE_TYPE_SUSPENDED]
         )
-        assert col.get_note(tagged_note.id).has_tag(addon.SUSPENDED_BY_ADDON_TAG)
-        assert col.get_note(control_note.id).has_tag(addon.SUSPENDED_BY_ADDON_TAG)
+        assert_card_is_not_addon_owned(col, tagged_cards[0])
+        assert_card_is_addon_owned(col, tagged_cards[1])
+        assert_card_is_addon_owned(col, tagged_cards[2])
+        assert_card_is_not_addon_owned(col, control_cards[0])
+        assert_card_is_not_addon_owned(col, control_cards[1])
+        assert_card_is_addon_owned(col, control_cards[2])
 
 
 def test_ignored_deck_skips_matching_tag_rule() -> None:
@@ -79,7 +87,6 @@ def test_ignored_deck_skips_matching_tag_rule() -> None:
     before tag-based matching can change the card queues.
     """
     with temporary_collection() as col:
-        addon = load_addon_module()
         model = build_test_notetype(col)
 
         active_deck_id = make_test_deck_id(col)
@@ -132,8 +139,12 @@ def test_ignored_deck_skips_matching_tag_rule() -> None:
         assert_card_queues(
             col, ignored_cards, [QUEUE_TYPE_REV, QUEUE_TYPE_NEW, QUEUE_TYPE_NEW]
         )
-        assert col.get_note(active_note.id).has_tag(addon.SUSPENDED_BY_ADDON_TAG)
-        assert not col.get_note(ignored_note.id).has_tag(addon.SUSPENDED_BY_ADDON_TAG)
+        assert_card_is_not_addon_owned(col, active_cards[0])
+        assert_card_is_addon_owned(col, active_cards[1])
+        assert_card_is_addon_owned(col, active_cards[2])
+        assert_card_is_not_addon_owned(col, ignored_cards[0])
+        assert_card_is_not_addon_owned(col, ignored_cards[1])
+        assert_card_is_not_addon_owned(col, ignored_cards[2])
 
 
 if __name__ == "__main__":

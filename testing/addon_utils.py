@@ -78,7 +78,8 @@ class AddonModule(Protocol):
 
     def clear_pending_browser_work(self) -> dict[str, Any]: ...
 
-    SUSPENDED_BY_ADDON_TAG: str
+    ADDON_CUSTOM_DATA_KEY: str
+    ADDON_CUSTOM_DATA_VALUE: str
 
 
 class FakeAddonManager:
@@ -140,7 +141,8 @@ def load_addon_module() -> Any:
     return SimpleNamespace(
         __name__=module_name,
         __package__=module_name,
-        SUSPENDED_BY_ADDON_TAG=state_module.SUSPENDED_BY_ADDON_TAG,
+        ADDON_CUSTOM_DATA_KEY=state_module.ADDON_CUSTOM_DATA_KEY,
+        ADDON_CUSTOM_DATA_VALUE=state_module.ADDON_CUSTOM_DATA_VALUE,
     )
 
 
