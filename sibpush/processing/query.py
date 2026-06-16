@@ -10,7 +10,7 @@ from anki.collection import Collection
 from anki.notes import Note, NoteId
 
 from ..config.parser import config_settings, custom_deck_rules_by_did, ignored_deck_ids
-from ..state import SUSPENDED_BY_ADDON_TAG, get_last_unmanaged_note_ids
+from ..state import get_last_unmanaged_note_ids
 
 
 def get_tag_rule(note: Note) -> dict[str, Any] | None:
@@ -87,7 +87,7 @@ def get_new_unmanaged_note_ids(col: Collection) -> Sequence[NoteId]:
     """
 
     ignored_query = " ".join(f"-did:{deck_id}" for deck_id in ignored_deck_ids if deck_id)
-    query = f"is:new -tag:{SUSPENDED_BY_ADDON_TAG} {ignored_query}".strip()
+    query = f"is:new -has-cd:sibpush {ignored_query}".strip()
     all_new_nids = col.find_notes(query)
 
     if not all_new_nids:

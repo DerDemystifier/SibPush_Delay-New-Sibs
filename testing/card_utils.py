@@ -4,6 +4,7 @@ Utilities for manipulating and asserting Anki Card objects in a test collection.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
@@ -25,6 +26,54 @@ def set_review_card_state(col: "Collection", card: "Card", *, ivl: int) -> None:
     card.ivl = ivl
     card.due = 1  # Arbitrary due date (tomorrow)
     col.update_card(card)
+
+
+def _load_custom_data(card: "Card") -> dict[str, object]:
+    raw_custom_data = getattr(card, "custom_data", "")
+    if not raw_custom_data:
+        return {}
+
+    try:
+        parsed = json.loads(raw_custom_data)
+    except (TypeError, json.JSONDecodeError):
+        return {}
+
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def set_card_custom_data(col: "Collection", card: "Card", custom_data: dict[str, object]) -> None:
+    fresh_card = col.get_card(card.id)
+    fresh_card.custom_data = json.dumps(custom_data, ensure_ascii=False) if custom_data else ""
+    col.update_card(fresh_card)
+
+
+def card_custom_data(col: "Collection", card: "Card") -> dict[str, object]:
+    return _load_custom_data(col.get_card(card.id))
+
+
+def set_addon_custom_data(col: "Collection", card: "Card") -> None:
+    data = card_custom_data(col, card)
+    data["sibpush"] = "suspended"
+    set_card_custom_data(col, card, data)
+
+
+def clear_addon_custom_data(col: "Collection", card: "Card") -> None:
+    data = card_custom_data(col, card)
+    if data.pop("sibpush", None) is None:
+        return
+    set_card_custom_data(col, card, data)
+
+
+def card_is_addon_owned(col: "Collection", card: "Card") -> bool:
+    return card_custom_data(col, card).get("sibpush") == "suspended"
+
+
+def assert_card_is_addon_owned(col: "Collection", card: "Card") -> None:
+    assert card_is_addon_owned(col, card), f"Card {card.id} should be marked as SibPush-owned"
+
+
+def assert_card_is_not_addon_owned(col: "Collection", card: "Card") -> None:
+    assert not card_is_addon_owned(col, card), f"Card {card.id} should not be marked as SibPush-owned"
 
 
 def card_queue(col: "Collection", card_id: "CardId") -> int:
