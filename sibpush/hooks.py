@@ -33,7 +33,7 @@ from aqt.qt import QTimer
 
 from .config.migration import migrate_legacy_config
 from .config.parser import load_config_state, on_config_display, on_config_save
-from .logging_support import initialize_log_file
+from .logging_support import initialize_log_file, logThis
 from .processing.notes import (
     process_modified_notes,
     process_new_unmanaged_notes,
@@ -47,6 +47,7 @@ from .state import (
     get_browser_scan_since_ts,
     get_mw,
     load_persistent_state,
+    needs_breaking_change_recovery,
     queue_pending_browser_work,
     reset_persistent_state,
     save_persistent_state,
@@ -123,6 +124,12 @@ def collection_did_load(col: Collection) -> None:
     initialize_log_file()
     load_persistent_state(col)
     load_config_state(col)
+
+    if needs_breaking_change_recovery():
+        unsuspend_all_addon_cards(col)
+        reset_persistent_state(col)
+        save_persistent_state(col)
+        logThis("SibPush performed breaking-change recovery on collection load")
 
 
 def addon_config_editor_will_display_json(text: str) -> str:

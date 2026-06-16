@@ -67,6 +67,11 @@ from testing.scenarios.test_tag_rule_precedence_and_ignored_deck_behavior import
     test_ignored_deck_skips_matching_tag_rule,
     test_tag_rule_takes_precedence_over_custom_deck_interval,
 )
+from testing.scenarios.test_breaking_change_recovery import (
+    test_needs_breaking_change_recovery_uses_the_version_floor,
+    test_collection_did_load_performs_recovery_when_version_is_missing,
+    test_collection_did_load_skips_recovery_when_future_version_is_stored,
+)
 
 
 import io
@@ -100,6 +105,9 @@ tests = {
     "test_tag_rule_takes_precedence_over_custom_deck_interval": test_tag_rule_takes_precedence_over_custom_deck_interval,
     "test_ignored_deck_skips_matching_tag_rule": test_ignored_deck_skips_matching_tag_rule,
     "test_on_config_save_unsuspends_addon_cards_for_newly_ignored_deck": test_on_config_save_unsuspends_addon_cards_for_newly_ignored_deck,
+    "test_needs_breaking_change_recovery_uses_the_version_floor": test_needs_breaking_change_recovery_uses_the_version_floor,
+    "test_collection_did_load_performs_recovery_when_version_is_missing": test_collection_did_load_performs_recovery_when_version_is_missing,
+    "test_collection_did_load_skips_recovery_when_future_version_is_stored": test_collection_did_load_skips_recovery_when_future_version_is_stored,
 }
 
 

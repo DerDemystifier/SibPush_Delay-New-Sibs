@@ -230,7 +230,7 @@ def test_browser_render_clears_stale_sync_watermark_after_scan() -> None:
             assert state_module.get_last_processed_mod_ts() == 400
             assert state_module.get_last_sync_mod_ts() is None
             assert state_file.read_text(encoding="utf-8") == (
-                '{"last_processed_mod_ts":400}'
+                f'{{"addon_version":"{state_module.ADDON_VERSION}","last_processed_mod_ts":400}}'
             )
 
 
@@ -320,6 +320,7 @@ def test_process_modified_notes_persists_the_processed_watermark() -> None:
             process_batch.assert_not_called()
             assert state_module.get_last_processed_mod_ts() == 123456
             assert json.loads(state_file.read_text(encoding="utf-8")) == {
+                "addon_version": state_module.ADDON_VERSION,
                 "last_processed_mod_ts": 123456,
             }
 
@@ -344,6 +345,7 @@ def test_sync_did_finish_persists_the_sync_watermark() -> None:
             process_unmanaged.assert_not_called()
             assert state_module.get_last_sync_mod_ts() == 654321
             assert json.loads(state_file.read_text(encoding="utf-8")) == {
+                "addon_version": state_module.ADDON_VERSION,
                 "last_sync_mod_ts": 654321,
                 "pending_browser_work": {
                     "pending_unsuspend_deck_ids": [],

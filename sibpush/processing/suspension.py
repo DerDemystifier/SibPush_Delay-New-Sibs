@@ -44,7 +44,7 @@ def _load_custom_data(card: Card) -> dict[str, Any]:
         return {}
 
     if isinstance(parsed_custom_data, dict):
-        return dict(parsed_custom_data)
+        return cast(dict[str, Any], parsed_custom_data)
 
     return {}
 
