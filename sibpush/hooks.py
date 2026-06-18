@@ -4,7 +4,7 @@ This module registers the Anki hooks that drive SibPush's sibling management.
 The add-on uses several hooks to monitor and respond to user actions:
 
 1. collection_did_load: Initialize on startup and load persistent state
-2. browser_render: Run the timestamp-based browser scan
+2. browser_render: Run startup migrations and the timestamp-based browser scan
 3. reviewer_did_answer_card: Process one note after a review action
 4. sync_did_finish: Queue unmanaged-note refresh and persist the sync watermark
 5. collection_did_temporarily_close: Queue a full reprocessing pass after one-way syncs
@@ -33,27 +33,27 @@ from aqt.qt import QTimer
 
 from .config.migration import migrate_legacy_config
 from .config.parser import load_config_state, on_config_display, on_config_save
-from .logging_support import initialize_log_file, logThis
+from .logging_support import initialize_log_file
+from .migration import run_startup_migrations
 from .processing.notes import (
     process_modified_notes,
     process_new_unmanaged_notes,
     process_note,
     show_processing_finished_tooltip,
 )
-from .processing.suspension import unsuspend_all_addon_cards
 from .state import (
     consume_pending_browser_work,
     clear_stale_sync_mod_ts,
     get_browser_scan_since_ts,
     get_mw,
     load_persistent_state,
-    needs_breaking_change_recovery,
-    queue_pending_browser_work,
     reset_persistent_state,
+    queue_pending_browser_work,
     save_persistent_state,
     sync_last_sync_mod_ts,
 )
 from .processing.suspension import unsuspend_all_addon_cards_in_deck
+from .processing.suspension import unsuspend_all_addon_cards
 from .ui.deck_actions import add_deck_actions_to_options_menu
 
 _BROWSER_SCAN_DELAY_MS = 500
@@ -125,12 +125,6 @@ def collection_did_load(col: Collection) -> None:
     load_persistent_state(col)
     load_config_state(col)
 
-    if needs_breaking_change_recovery():
-        unsuspend_all_addon_cards(col)
-        reset_persistent_state(col)
-        save_persistent_state(col)
-        logThis("SibPush performed breaking-change recovery on collection load")
-
 
 def addon_config_editor_will_display_json(text: str) -> str:
     """Show the profile-local config when the Add-ons Config panel opens.
@@ -163,6 +157,8 @@ def browser_render(browser: Any) -> None:
     if not browser or not browser.mw.col:
         raise Exception("SibPush : Anki is not initialized properly")
 
+    col = browser.mw.col
+
     global _pending_browser_scan
 
     if _pending_browser_scan:
@@ -177,11 +173,6 @@ def browser_render(browser: Any) -> None:
         _skip_next_browser_render_scan = False
         return
 
-    col = browser.mw.col
-
-    # We set the in-flight flag only when we are actually about to schedule work. The flag stays
-    # raised until the event loop has had a chance to settle after the scan, which prevents the
-    # browser refresh that the scan itself causes from launching a second scan immediately.
     _pending_browser_scan = True
 
     pending_browser_work = consume_pending_browser_work()
@@ -219,7 +210,14 @@ def browser_render(browser: Any) -> None:
             _clear_pending_browser_scan()
             raise
 
-    cast(Any, QTimer).singleShot(_BROWSER_SCAN_DELAY_MS, _run_browser_render)
+    def _start_browser_scan() -> None:
+        cast(Any, QTimer).singleShot(_BROWSER_SCAN_DELAY_MS, _run_browser_render)
+
+    try:
+        run_startup_migrations(col, on_complete=_start_browser_scan)
+    except Exception:
+        _clear_pending_browser_scan()
+        raise
 
 
 def reviewer_did_answer_card(reviewer: Any, card: Card, ease: int) -> None:

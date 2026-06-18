@@ -247,6 +247,7 @@ def test_collection_load_does_not_queue_a_startup_reset_from_profile_config() ->
             state_module.sync_last_processed_mod_ts(123)
             state_module.sync_last_sync_mod_ts(456)
             state_module.save_persistent_state(col)
+            state_module.load_persistent_state(col)
 
             browser = SimpleNamespace(mw=SimpleNamespace(col=col))
             scheduled: dict[str, object] = {}

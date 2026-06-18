@@ -90,6 +90,12 @@ def get_mw() -> Any:
     return mw
 
 
+def is_persistent_state_loaded() -> bool:
+    """Return whether persistent state has already been loaded for this session."""
+
+    return _persistent_state_loaded
+
+
 def _resolve_collection_path(col: Any | None = None) -> Path | None:
     """Return the filesystem path for the active collection, if available."""
 
