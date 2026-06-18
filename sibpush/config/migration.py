@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from . import parser
-from ..state import get_config_file_path, get_mw
+from ..state import CONFIG_IGNORED_KEY, get_config_file_path, get_mw
 
 
 def _get_deck_lookup() -> dict[str, str]:
@@ -67,7 +67,7 @@ def _build_migrated_config(
                 return None
             continue
 
-        migrated_rules.append({"did": did, "name": raw_label, "ignored": True})
+        migrated_rules.append({"did": did, "name": raw_label, CONFIG_IGNORED_KEY: True})
 
     return {
         "default_interval": default_interval,

@@ -7,7 +7,7 @@ from typing import Any
 
 from aqt.qt import QMenu
 
-from ..processing.suspension import card_is_addon_owned
+from ..processing.suspension import card_is_ignored, clear_card_ignored, set_card_ignored
 from ..state import get_mw
 
 
@@ -34,11 +34,25 @@ def add_browser_card_actions(browser: Browser, menu: QMenu) -> None:
         return
 
     cards = [col.get_card(cid) for cid in card_ids]
-    all_ignored = all(card_is_addon_owned(card) for card in cards)
+    all_ignored = all(card_is_ignored(card) for card in cards)
     label = "Ignore card" if len(card_ids) == 1 else "Ignore cards"
 
     submenu: Any = menu.addMenu("SibPush")
     ignore_action: Any = submenu.addAction(label)
     ignore_action.setCheckable(True)
     ignore_action.setChecked(all_ignored)
-    ignore_action.triggered.connect(lambda: None)
+
+    def handle_ignore_toggle() -> None:
+        if all_ignored:
+            for card in cards:
+                clear_card_ignored(col, card)
+        else:
+            for card in cards:
+                set_card_ignored(col, card)
+
+        save_collection = getattr(col, "save", None)
+        if callable(save_collection):
+            save_collection()
+        browser.model.reset()
+
+    ignore_action.triggered.connect(handle_ignore_toggle)

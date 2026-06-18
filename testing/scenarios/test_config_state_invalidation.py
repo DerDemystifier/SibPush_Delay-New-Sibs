@@ -43,11 +43,12 @@ def test_ignoring_a_deck_keeps_persistent_state() -> None:
             addon = patched_addon
             parser_module = import_module(f"{addon.__name__}.sibpush.config.parser")
             state_module = import_module(f"{addon.__name__}.sibpush.state")
+            ignored_key = state_module.CONFIG_IGNORED_KEY
 
             active_rule = {
                 "did": "1777739665453",
                 "name": "Ignore-only deck",
-                "ignored": False,
+                ignored_key: False,
                 "interval": 21,
             }
             patched_addon.config_settings["custom_deck_rules"] = [active_rule]
@@ -77,7 +78,7 @@ def test_ignoring_a_deck_keeps_persistent_state() -> None:
                 },
             }
             profile_config = _read_profile_config_file(state_module, col)
-            assert profile_config["custom_deck_rules"][0]["ignored"] is True
+            assert profile_config["custom_deck_rules"][0][ignored_key] is True
 
 
 def test_changing_interval_resets_persistent_state() -> None:
@@ -97,11 +98,12 @@ def test_changing_interval_resets_persistent_state() -> None:
             addon = patched_addon
             parser_module = import_module(f"{addon.__name__}.sibpush.config.parser")
             state_module = import_module(f"{addon.__name__}.sibpush.state")
+            ignored_key = state_module.CONFIG_IGNORED_KEY
 
             active_rule = {
                 "did": "1777739665453",
                 "name": "Interval deck",
-                "ignored": False,
+                ignored_key: False,
                 "interval": 21,
             }
             patched_addon.config_settings["custom_deck_rules"] = [active_rule]
@@ -203,11 +205,12 @@ def test_unignoring_a_deck_resets_persistent_state() -> None:
             addon = patched_addon
             parser_module = import_module(f"{addon.__name__}.sibpush.config.parser")
             state_module = import_module(f"{addon.__name__}.sibpush.state")
+            ignored_key = state_module.CONFIG_IGNORED_KEY
 
             ignored_rule = {
                 "did": "1777739665453",
                 "name": "Unignore deck",
-                "ignored": True,
+                ignored_key: True,
                 "interval": 21,
             }
             patched_addon.config_settings["custom_deck_rules"] = [ignored_rule]
@@ -240,7 +243,7 @@ def test_unignoring_a_deck_resets_persistent_state() -> None:
                 },
             }
             profile_config = _read_profile_config_file(state_module, col)
-            assert profile_config["custom_deck_rules"][0]["ignored"] is False
+            assert profile_config["custom_deck_rules"][0][ignored_key] is False
 
 
 if __name__ == "__main__":

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from importlib import import_module
+
 from anki.consts import QUEUE_TYPE_NEW, QUEUE_TYPE_SUSPENDED
 
 from ..addon_utils import patched_addon_state
@@ -40,8 +42,10 @@ def test_ignores_custom_deck_rule_by_deck_id() -> None:
         print_collection_state(col, "Before processing (deck rule matched by did)")
 
         with patched_addon_state(col) as patched_addon:
+            state_module = import_module(f"{patched_addon.__name__}.sibpush.state")
+            ignored_key = state_module.CONFIG_IGNORED_KEY
             patched_addon.config_settings["custom_deck_rules"] = [
-                {"did": str(ignored_deck_id), "name": "Ignored Sib Deck", "ignored": True}
+                {"did": str(ignored_deck_id), "name": "Ignored Sib Deck", ignored_key: True}
             ]
             patched_addon.ignored_deck_ids[:] = [str(ignored_deck_id)]
             patched_addon.process_all_notes(col)

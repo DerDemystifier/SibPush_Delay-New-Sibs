@@ -6,6 +6,8 @@ from collections.abc import Sequence
 
 from anki.cards import CARD_TYPE_NEW, QUEUE_TYPE_SUSPENDED, Card
 
+from ..processing.suspension import card_is_ignored
+
 
 def classify_cards(
     siblings: Sequence[Card], interval_threshold: int
@@ -37,6 +39,9 @@ def classify_cards(
     immature_cards: list[Card] = []
 
     for sibling in siblings:
+        if card_is_ignored(sibling):
+            continue
+
         # Skip suspended cards - they're already out of rotation and don't affect scheduling
         if sibling.queue == QUEUE_TYPE_SUSPENDED:
             continue

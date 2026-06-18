@@ -80,6 +80,8 @@ class AddonModule(Protocol):
 
     ADDON_CUSTOM_DATA_KEY: str
     ADDON_CUSTOM_DATA_VALUE: str
+    ADDON_CUSTOM_DATA_IGNORED_VALUE: str
+    CONFIG_IGNORED_KEY: str
 
 
 class FakeAddonManager:
@@ -143,6 +145,8 @@ def load_addon_module() -> Any:
         __package__=module_name,
         ADDON_CUSTOM_DATA_KEY=state_module.ADDON_CUSTOM_DATA_KEY,
         ADDON_CUSTOM_DATA_VALUE=state_module.ADDON_CUSTOM_DATA_VALUE,
+        ADDON_CUSTOM_DATA_IGNORED_VALUE=state_module.ADDON_CUSTOM_DATA_IGNORED_VALUE,
+        CONFIG_IGNORED_KEY=state_module.CONFIG_IGNORED_KEY,
     )
 
 
@@ -175,6 +179,7 @@ def patched_addon_state(
     """
     addon = load_addon_module()
     state_module, parser_module, notes_module = _load_test_modules()
+    from . import card_utils as test_card_utils
     addon.mw = state_module.mw
     addon.last_full_scan_date = state_module.last_full_scan_date
     addon.last_unmanaged_note_ids = state_module.last_unmanaged_note_ids
@@ -202,6 +207,7 @@ def patched_addon_state(
     addon.discard_pending_unsuspend_deck_id = state_module.discard_pending_unsuspend_deck_id
     addon.consume_pending_browser_work = state_module.consume_pending_browser_work
     addon.clear_pending_browser_work = state_module.clear_pending_browser_work
+    test_card_utils.set_addon_constants(addon)
 
     original_mw = state_module.mw
     original_last_full_scan_date = state_module.last_full_scan_date

@@ -7,7 +7,7 @@ from typing import Any
 from aqt.qt import QInputDialog, QMenu
 
 from ..config.parser import get_custom_deck_rule_snapshot, update_custom_deck_rule
-from ..state import get_mw
+from ..state import CONFIG_IGNORED_KEY, get_mw
 
 
 def _get_collection() -> Any | None:
@@ -64,7 +64,7 @@ def _toggle_ignore_state(deck_id: int) -> None:
     update_custom_deck_rule(
         str(deck_id),
         deck_name,
-        ignored=not snapshot["ignored"],
+        ignored=not snapshot[CONFIG_IGNORED_KEY],
         interval=snapshot["interval"],
     )
 
@@ -104,7 +104,7 @@ def _set_custom_interval(deck_id: int) -> None:
     update_custom_deck_rule(
         str(deck_id),
         deck_name,
-        ignored=snapshot["ignored"],
+        ignored=snapshot[CONFIG_IGNORED_KEY],
         interval=value,
     )
 
@@ -136,7 +136,7 @@ def add_deck_actions_to_options_menu(menu: QMenu, deck_id: int) -> None:
     submenu = menu.addMenu("SibPush")
 
     # Add the ignore/unignore toggle action
-    ignore_label = "Unignore current deck" if snapshot["ignored"] else "Ignore current deck"
+    ignore_label = "Unignore current deck" if snapshot[CONFIG_IGNORED_KEY] else "Ignore current deck"
     ignore_action = submenu.addAction(ignore_label)
     # Capture the current deck id as a default argument so the callback keeps the
     # deck that was right-clicked, even though the lambda runs later.

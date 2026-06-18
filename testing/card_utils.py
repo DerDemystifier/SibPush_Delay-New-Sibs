@@ -7,12 +7,34 @@ from __future__ import annotations
 import json
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
+from types import SimpleNamespace
 
 from anki.consts import CARD_TYPE_REV, QUEUE_TYPE_REV
 
 if TYPE_CHECKING:
     from anki.cards import Card, CardId
     from anki.collection import Collection
+
+
+_addon_constants_state = SimpleNamespace(
+    ADDON_CUSTOM_DATA_KEY="",
+    ADDON_CUSTOM_DATA_VALUE="",
+    ADDON_CUSTOM_DATA_IGNORED_VALUE="",
+    CONFIG_IGNORED_KEY="",
+)
+
+
+def set_addon_constants(addon: object) -> None:
+    _addon_constants_state.ADDON_CUSTOM_DATA_KEY = getattr(addon, "ADDON_CUSTOM_DATA_KEY", "")
+    _addon_constants_state.ADDON_CUSTOM_DATA_VALUE = getattr(addon, "ADDON_CUSTOM_DATA_VALUE", "")
+    _addon_constants_state.ADDON_CUSTOM_DATA_IGNORED_VALUE = getattr(
+        addon, "ADDON_CUSTOM_DATA_IGNORED_VALUE", ""
+    )
+    _addon_constants_state.CONFIG_IGNORED_KEY = getattr(addon, "CONFIG_IGNORED_KEY", "")
+
+
+def _addon_constants() -> SimpleNamespace:
+    return _addon_constants_state
 
 
 def set_review_card_state(col: "Collection", card: "Card", *, ivl: int) -> None:
@@ -52,28 +74,65 @@ def card_custom_data(col: "Collection", card: "Card") -> dict[str, object]:
 
 
 def set_addon_custom_data(col: "Collection", card: "Card") -> None:
+    addon = _addon_constants()
     data = card_custom_data(col, card)
-    data["sibpush"] = "suspended"
+    data[getattr(addon, "ADDON_CUSTOM_DATA_KEY")] = getattr(addon, "ADDON_CUSTOM_DATA_VALUE")
+    set_card_custom_data(col, card, data)
+
+
+def set_card_ignored(col: "Collection", card: "Card") -> None:
+    addon = _addon_constants()
+    data = card_custom_data(col, card)
+    data[getattr(addon, "ADDON_CUSTOM_DATA_KEY")] = getattr(
+        addon, "ADDON_CUSTOM_DATA_IGNORED_VALUE"
+    )
     set_card_custom_data(col, card, data)
 
 
 def clear_addon_custom_data(col: "Collection", card: "Card") -> None:
+    addon = _addon_constants()
     data = card_custom_data(col, card)
-    if data.pop("sibpush", None) is None:
+    if data.pop(getattr(addon, "ADDON_CUSTOM_DATA_KEY"), None) is None:
+        return
+    set_card_custom_data(col, card, data)
+
+
+def clear_card_ignored(col: "Collection", card: "Card") -> None:
+    addon = _addon_constants()
+    data = card_custom_data(col, card)
+    if data.pop(getattr(addon, "ADDON_CUSTOM_DATA_KEY"), None) is None:
         return
     set_card_custom_data(col, card, data)
 
 
 def card_is_addon_owned(col: "Collection", card: "Card") -> bool:
-    return card_custom_data(col, card).get("sibpush") == "suspended"
+    addon = _addon_constants()
+    return card_custom_data(col, card).get(getattr(addon, "ADDON_CUSTOM_DATA_KEY")) == getattr(
+        addon, "ADDON_CUSTOM_DATA_VALUE"
+    )
+
+
+def card_is_ignored(col: "Collection", card: "Card") -> bool:
+    addon = _addon_constants()
+    return card_custom_data(col, card).get(getattr(addon, "ADDON_CUSTOM_DATA_KEY")) == getattr(
+        addon, "ADDON_CUSTOM_DATA_IGNORED_VALUE"
+    )
 
 
 def assert_card_is_addon_owned(col: "Collection", card: "Card") -> None:
     assert card_is_addon_owned(col, card), f"Card {card.id} should be marked as SibPush-owned"
 
 
+def assert_card_is_ignored(col: "Collection", card: "Card") -> None:
+    assert card_is_ignored(col, card), f"Card {card.id} should be marked as ignored"
+
+
 def assert_card_is_not_addon_owned(col: "Collection", card: "Card") -> None:
     assert not card_is_addon_owned(col, card), f"Card {card.id} should not be marked as SibPush-owned"
+
+
+def assert_card_is_not_ignored(col: "Collection", card: "Card") -> None:
+    assert not card_is_ignored(col, card), f"Card {card.id} should not be marked as ignored"
 
 
 def card_queue(col: "Collection", card_id: "CardId") -> int:

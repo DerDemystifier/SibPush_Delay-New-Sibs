@@ -282,7 +282,10 @@ def test_collection_did_load_skips_recovery_when_future_version_is_stored() -> N
             assert state_module.needs_breaking_change_recovery() is False
             assert card_queue(col, cards[0].id) == QUEUE_TYPE_SUSPENDED
             assert card_is_addon_owned(col, cards[0])
-            assert card_custom_data(col, cards[0])["sibpush"] == "suspended"
+            assert (
+                card_custom_data(col, cards[0])[state_module.ADDON_CUSTOM_DATA_KEY]
+                == state_module.ADDON_CUSTOM_DATA_VALUE
+            )
             assert json.loads(state_file.read_text(encoding="utf-8")) == {
                 "addon_version": state_module.ADDON_VERSION,
             }
