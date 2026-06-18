@@ -14,7 +14,12 @@ from anki.notes import NoteId
 from aqt.qt import QTimer
 from aqt.utils import tooltip
 
-from ..state import ADDON_CUSTOM_DATA_KEY, ADDON_CUSTOM_DATA_VALUE
+from ..state import (
+    ADDON_CUSTOM_DATA_IGNORED_VALUE,
+    ADDON_CUSTOM_DATA_KEY,
+    ADDON_CUSTOM_DATA_VALUE,
+    CONFIG_IGNORED_KEY,
+)
 from .query import get_deck_rule
 
 DECK_UNSUSPEND_BATCH_SIZE = 1000
@@ -83,6 +88,37 @@ def _clear_addon_custom_data(col: Collection, card: Card) -> bool:
     return True
 
 
+def card_is_ignored(card: Card) -> bool:
+    """Return whether a card is marked as ignored by SibPush."""
+
+    return _load_custom_data(card).get(ADDON_CUSTOM_DATA_KEY) == ADDON_CUSTOM_DATA_IGNORED_VALUE
+
+
+def set_card_ignored(col: Collection, card: Card) -> None:
+    """Mark a card as ignored while preserving other custom_data keys."""
+
+    if card_is_addon_owned(card):
+        col.sched.unsuspend_cards([card.id])
+        _clear_addon_custom_data(col, card)
+
+    fresh_card = col.get_card(card.id)
+    custom_data = _load_custom_data(fresh_card)
+    custom_data[ADDON_CUSTOM_DATA_KEY] = ADDON_CUSTOM_DATA_IGNORED_VALUE
+    _write_custom_data(col, fresh_card, custom_data)
+
+
+def clear_card_ignored(col: Collection, card: Card) -> None:
+    """Remove the ignored marker from a card while preserving other custom_data keys."""
+
+    fresh_card = col.get_card(card.id)
+    custom_data = _load_custom_data(fresh_card)
+    if ADDON_CUSTOM_DATA_KEY not in custom_data:
+        return
+
+    custom_data.pop(ADDON_CUSTOM_DATA_KEY, None)
+    _write_custom_data(col, fresh_card, custom_data)
+
+
 def card_is_addon_owned(card: Card) -> bool:
     """Return whether a card is marked as SibPush-owned."""
 
@@ -122,7 +158,7 @@ def note_is_ignored_deck(card: Card) -> bool:
     """
 
     rule = get_deck_rule(card)
-    return bool(rule and rule.get("ignored"))
+    return bool(rule and rule.get(CONFIG_IGNORED_KEY))
 
 
 def unsuspend_all_addon_cards_in_deck(col: Collection, deck_id: str) -> None:

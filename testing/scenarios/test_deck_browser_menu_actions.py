@@ -69,6 +69,7 @@ def test_deck_browser_submenu_toggles_ignore_and_sets_interval() -> None:
             addon = patched_addon
             deck_actions = import_module(f"{addon.__name__}.sibpush.ui.deck_actions")
             state_module = import_module(f"{addon.__name__}.sibpush.state")
+            ignored_key = state_module.CONFIG_IGNORED_KEY
 
             menu = _FakeMenu("root")
             deck_actions.add_deck_actions_to_options_menu(menu, deck_id)
@@ -84,7 +85,7 @@ def test_deck_browser_submenu_toggles_ignore_and_sets_interval() -> None:
             submenu.actions[0].triggered.callbacks[0]()
             profile_config = _read_profile_config_file(state_module, col)
             assert profile_config["custom_deck_rules"][0]["did"] == str(deck_id)
-            assert profile_config["custom_deck_rules"][0]["ignored"] is True
+            assert profile_config["custom_deck_rules"][0][ignored_key] is True
 
             refreshed_menu = _FakeMenu("root")
             deck_actions.add_deck_actions_to_options_menu(refreshed_menu, deck_id)
@@ -95,7 +96,7 @@ def test_deck_browser_submenu_toggles_ignore_and_sets_interval() -> None:
 
             profile_config = _read_profile_config_file(state_module, col)
             assert profile_config["custom_deck_rules"][0]["interval"] == 33
-            assert profile_config["custom_deck_rules"][0]["ignored"] is True
+            assert profile_config["custom_deck_rules"][0][ignored_key] is True
             assert fake_manager.config == {
                 "default_interval": 30,
                 "custom_deck_rules": [],

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from importlib import import_module
+
 from anki.consts import QUEUE_TYPE_NEW, QUEUE_TYPE_REV, QUEUE_TYPE_SUSPENDED
 
 from ..addon_utils import patched_addon_state
@@ -46,10 +48,12 @@ def test_tag_rule_takes_precedence_over_custom_deck_interval() -> None:
         print_collection_state(col, "Before processing (tag rule vs custom deck interval)")
 
         with patched_addon_state(col) as patched_addon:
+            state_module = import_module(f"{patched_addon.__name__}.sibpush.state")
+            ignored_key = state_module.CONFIG_IGNORED_KEY
             custom_rule = {
                 "did": str(custom_deck_id),
                 "name": "Tagged Custom Deck",
-                "ignored": False,
+                ignored_key: False,
                 "interval": 18,
             }
             patched_addon.config_settings["custom_deck_rules"] = [custom_rule]
@@ -114,10 +118,12 @@ def test_ignored_deck_skips_matching_tag_rule() -> None:
         print_collection_state(col, "Before processing (ignored deck vs active tagged deck)")
 
         with patched_addon_state(col) as patched_addon:
+            state_module = import_module(f"{patched_addon.__name__}.sibpush.state")
+            ignored_key = state_module.CONFIG_IGNORED_KEY
             ignored_rule = {
                 "did": str(ignored_deck_id),
                 "name": "Ignored Tagged Deck",
-                "ignored": True,
+                ignored_key: True,
                 "interval": 18,
             }
             patched_addon.config_settings["custom_deck_rules"] = [ignored_rule]

@@ -41,10 +41,11 @@ def test_on_config_save_unsuspends_addon_cards_for_newly_ignored_deck() -> None:
             addon = patched_addon
             parser_module = import_module(f"{addon.__name__}.sibpush.config.parser")
             state_module = import_module(f"{addon.__name__}.sibpush.state")
+            ignored_key = state_module.CONFIG_IGNORED_KEY
             active_rule = {
                 "did": str(deck_id),
                 "name": "Ignored deck cleanup note",
-                "ignored": False,
+                ignored_key: False,
                 "interval": 21,
             }
             patched_addon.config_settings["custom_deck_rules"] = [active_rule]
@@ -69,7 +70,7 @@ def test_on_config_save_unsuspends_addon_cards_for_newly_ignored_deck() -> None:
             ignored_rule = {
                 "did": str(deck_id),
                 "name": "Ignored deck cleanup note",
-                "ignored": True,
+                ignored_key: True,
                 "interval": 21,
             }
             config_text = json.dumps(

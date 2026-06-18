@@ -56,10 +56,11 @@ def test_update_custom_deck_rule_unsuspends_cards_when_deck_becomes_ignored() ->
             addon = patched_addon
             parser_module = import_module(f"{addon.__name__}.sibpush.config.parser")
             state_module = import_module(f"{addon.__name__}.sibpush.state")
+            ignored_key = state_module.CONFIG_IGNORED_KEY
             active_rule = {
                 "did": str(deck_id),
                 "name": "Ignored deck cleanup note",
-                "ignored": False,
+                ignored_key: False,
                 "interval": 21,
             }
             patched_addon.config_settings["custom_deck_rules"] = [active_rule]
@@ -97,7 +98,7 @@ def test_update_custom_deck_rule_unsuspends_cards_when_deck_becomes_ignored() ->
         print_collection_state(col, "After UI-driven config save (cleanup queued, not yet run)")
 
         profile_config = _read_profile_config_file(state_module, col)
-        assert profile_config["custom_deck_rules"][0]["ignored"] is True
+        assert profile_config["custom_deck_rules"][0][ignored_key] is True
         assert profile_config["custom_deck_rules"][0]["did"] == str(deck_id)
         assert fake_manager.config == {
             "default_interval": 30,

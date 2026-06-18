@@ -70,6 +70,8 @@ _pending_browser_work = _default_pending_browser_work()
 
 ADDON_CUSTOM_DATA_KEY = "sibpush"
 ADDON_CUSTOM_DATA_VALUE = "suspended"
+ADDON_CUSTOM_DATA_IGNORED_VALUE = "ignored"
+CONFIG_IGNORED_KEY = ADDON_CUSTOM_DATA_IGNORED_VALUE
 ADDON_VERSION = "2.0.0"  # Update this when releasing a new version
 BREAKING_CHANGE_VERSION = "2.0.0"  # Set this equal ADDON_VERSION if the release includes breaking changes that require the recovery flow to run.
 VERSION_KEY = "addon_version"

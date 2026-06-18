@@ -13,6 +13,7 @@ from aqt import mw
 
 from ..logging_support import initialize_log_file, logThis
 from ..state import (
+    CONFIG_IGNORED_KEY,
     discard_pending_unsuspend_deck_id,
     get_mw,
     get_config_file_path,
@@ -188,7 +189,7 @@ def _normalize_custom_deck_rule(rule: Any, default_interval: int) -> dict[str, A
     return {
         "did": did,
         "name": name,
-        "ignored": bool(rule_dict.get("ignored", False)),
+        CONFIG_IGNORED_KEY: bool(rule_dict.get(CONFIG_IGNORED_KEY, False)),
         "interval": _parse_int(rule_dict.get("interval", default_interval), default_interval),
     }
 
@@ -250,7 +251,7 @@ def _extract_ignored_deck_ids(custom_deck_rules: list[dict[str, Any]]) -> list[s
     return [
         str(rule.get("did", "")).strip()
         for rule in custom_deck_rules
-        if rule.get("ignored") and str(rule.get("did", "")).strip()
+        if rule.get(CONFIG_IGNORED_KEY) and str(rule.get("did", "")).strip()
     ]
 
 
@@ -293,7 +294,7 @@ def _extract_custom_deck_rule_effects(
             continue
 
         rule_effects[did] = (
-            bool(rule_dict.get("ignored", False)),
+            bool(rule_dict.get(CONFIG_IGNORED_KEY, False)),
             _parse_int(rule_dict.get("interval", default_interval), default_interval),
         )
 
@@ -388,7 +389,7 @@ def get_custom_deck_rule_snapshot(deck_id: str) -> dict[str, Any]:
     return {
         "did": str(deck_id).strip(),
         "name": str(rule.get("name", "")).strip(),
-        "ignored": bool(rule.get("ignored", False)),
+        CONFIG_IGNORED_KEY: bool(rule.get(CONFIG_IGNORED_KEY, False)),
         "interval": _parse_int(rule.get("interval", default_interval), default_interval),
     }
 
@@ -434,14 +435,14 @@ def _prepare_custom_deck_rule(
         rule = {
             "did": normalized_deck_id,
             "name": normalized_deck_name,
-            "ignored": False,
+            CONFIG_IGNORED_KEY: False,
             "interval": default_interval,
         }
         custom_deck_rules.append(rule)
     else:
         rule["did"] = normalized_deck_id
         rule["name"] = normalized_deck_name
-        rule.setdefault("ignored", False)
+        rule.setdefault(CONFIG_IGNORED_KEY, False)
         rule.setdefault("interval", default_interval)
 
     return rule
@@ -561,7 +562,7 @@ def update_custom_deck_rule(
     rule = _prepare_custom_deck_rule(updated_config, deck_id, deck_name)
 
     if ignored is not None:
-        rule["ignored"] = ignored
+        rule[CONFIG_IGNORED_KEY] = ignored
 
     if interval is not None:
         rule["interval"] = interval

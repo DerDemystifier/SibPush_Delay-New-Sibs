@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 from unittest.mock import patch
 
-from ..addon_utils import FakeAddonManager, patched_addon_state
+from ..addon_utils import FakeAddonManager, load_addon_module, patched_addon_state
 from ..collection_utils import temporary_collection
 from ..note_utils import make_test_deck_id
 
@@ -45,13 +45,16 @@ class _FakeMenu:
 def test_addon_config_editor_displays_profile_config() -> None:
     """The Add-ons Config panel should display the profile-local config when it exists."""
 
+    addon = load_addon_module()
+    ignored_key = addon.CONFIG_IGNORED_KEY
+
     profile_config = {
         "default_interval": 33,
         "custom_deck_rules": [
             {
                 "did": "1777739665453",
                 "name": "Profile-local deck",
-                "ignored": True,
+                ignored_key: True,
                 "interval": 33,
             }
         ],
@@ -117,13 +120,15 @@ def test_collection_load_refreshes_menu_state_from_profile_config() -> None:
     """Deck actions should prefer the profile-local config after the collection loads."""
 
     deck_id = "1777739665453"
+    addon = load_addon_module()
+    ignored_key = addon.CONFIG_IGNORED_KEY
     profile_config = {
         "default_interval": 33,
         "custom_deck_rules": [
             {
                 "did": deck_id,
                 "name": "Profile-local deck",
-                "ignored": False,
+                ignored_key: False,
                 "interval": 33,
             }
         ],
@@ -136,7 +141,7 @@ def test_collection_load_refreshes_menu_state_from_profile_config() -> None:
             {
                 "did": deck_id,
                 "name": "Meta deck",
-                "ignored": True,
+                ignored_key: True,
                 "interval": 30,
             }
         ],
@@ -177,13 +182,15 @@ def test_collection_load_refreshes_menu_state_from_profile_config() -> None:
 def test_collection_load_does_not_fall_back_to_meta_config() -> None:
     """Runtime config should ignore meta.json when the profile-local file is absent."""
 
+    addon = load_addon_module()
+    ignored_key = addon.CONFIG_IGNORED_KEY
     meta_config = {
         "default_interval": 30,
         "custom_deck_rules": [
             {
                 "did": "1777739665453",
                 "name": "Meta deck",
-                "ignored": True,
+                ignored_key: True,
                 "interval": 30,
             }
         ],

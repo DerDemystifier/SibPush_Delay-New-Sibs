@@ -13,6 +13,7 @@ def test_migrates_legacy_config_into_custom_deck_rules() -> None:
     custom_deck_rules structure without losing the debug setting or the ignored deck mappings.
     """
     addon = load_addon_module()
+    ignored_key = addon.CONFIG_IGNORED_KEY
     config_migration = importlib.import_module(f"{addon.__name__}.sibpush.config.migration")
 
     print(
@@ -40,13 +41,13 @@ def test_migrates_legacy_config_into_custom_deck_rules() -> None:
             {
                 "did": "1777739665453",
                 "name": "1777739665453",
-                "ignored": True,
+                ignored_key: True,
                 "interval": 21,
             },
             {
                 "did": "1777739665454",
                 "name": "Ignored deck",
-                "ignored": True,
+                ignored_key: True,
                 "interval": 21,
             },
         ],
