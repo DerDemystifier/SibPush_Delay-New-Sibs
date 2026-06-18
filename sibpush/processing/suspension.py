@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import random
 from collections.abc import Sequence
-from typing import Any, cast
+from typing import Any, Callable, cast
 
 from anki.cards import Card, CardId
 from anki.collection import Collection
@@ -192,14 +192,24 @@ def unsuspend_all_addon_cards_in_deck(col: Collection, deck_id: str) -> None:
     cast(Any, QTimer).singleShot(0, _process_chunk)
 
 
-def unsuspend_all_addon_cards(col: Collection) -> None:
+def unsuspend_all_addon_cards(
+    col: Collection,
+    pause_ms: int | None = None,
+    on_complete: Callable[[], None] | None = None,
+) -> None:
     """Unsuspend all add-on-managed cards across every deck.
 
     Args:
         col (anki.collection.Collection): The collection that owns the cards.
 
+    Args:
+        pause_ms (int | None): Optional pause between chunks. When omitted, the unsuspend runs
+            immediately, preserving the current delete-time behavior.
+        on_complete (Callable[[], None] | None): Optional callback that runs after all cards are
+            restored.
+
     Returns:
-        None: The matching cards are restored immediately for their side effects.
+        None: The matching cards are restored for their side effects.
     """
 
     card_ids_to_unsuspend: list[CardId] = []
@@ -212,10 +222,57 @@ def unsuspend_all_addon_cards(col: Collection) -> None:
         card_ids_to_unsuspend.append(card.id)
 
     if not card_ids_to_unsuspend:
+        if on_complete is not None:
+            on_complete()
         return
 
-    for start_index in range(0, len(card_ids_to_unsuspend), DECK_UNSUSPEND_BATCH_SIZE):
-        chunk = card_ids_to_unsuspend[start_index : start_index + DECK_UNSUSPEND_BATCH_SIZE]
-        col.sched.unsuspend_cards(chunk)
-        for card_id in chunk:
-            _clear_addon_custom_data(col, col.get_card(card_id))
+    if pause_ms is None or len(card_ids_to_unsuspend) <= DECK_UNSUSPEND_BATCH_SIZE:
+        for start_index in range(0, len(card_ids_to_unsuspend), DECK_UNSUSPEND_BATCH_SIZE):
+            chunk = card_ids_to_unsuspend[
+                start_index : start_index + DECK_UNSUSPEND_BATCH_SIZE
+            ]
+            col.sched.unsuspend_cards(chunk)
+            for card_id in chunk:
+                _clear_addon_custom_data(col, col.get_card(card_id))
+
+        if on_complete is not None:
+            on_complete()
+        return
+
+    total_count = len(card_ids_to_unsuspend)
+    displayed_count = 0
+
+    def _finish_unsuspending() -> None:
+        if on_complete is not None:
+            on_complete()
+
+    def _process_chunk(start_index: int = 0) -> None:
+        nonlocal displayed_count
+        try:
+            chunk_size = _get_variable_chunk_size(DECK_UNSUSPEND_BATCH_SIZE)
+            chunk = card_ids_to_unsuspend[start_index : start_index + chunk_size]
+            if not chunk:
+                _finish_unsuspending()
+                return
+
+            col.sched.unsuspend_cards(chunk)
+            for card_id in chunk:
+                _clear_addon_custom_data(col, col.get_card(card_id))
+
+            displayed_count = min(total_count, displayed_count + len(chunk))
+
+            next_index = start_index + len(chunk)
+            if next_index >= total_count:
+                _finish_unsuspending()
+                return
+
+            cast(Any, QTimer).singleShot(
+                pause_ms,
+                lambda next_start_index=next_index: _process_chunk(next_start_index),
+            )
+        except Exception:
+            if on_complete is not None:
+                on_complete()
+            raise
+
+    cast(Any, QTimer).singleShot(0, _process_chunk)

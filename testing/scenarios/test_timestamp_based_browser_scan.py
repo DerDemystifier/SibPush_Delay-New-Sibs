@@ -21,6 +21,7 @@ def test_browser_render_uses_the_older_timestamp_watermark() -> None:
             state_module.sync_last_processed_mod_ts(300)
             state_module.sync_last_sync_mod_ts(200)
             state_module.save_persistent_state(col)
+            state_module.load_persistent_state(col)
 
             browser = SimpleNamespace(mw=SimpleNamespace(col=col))
             scheduled: dict[str, object] = {}
@@ -71,6 +72,7 @@ def test_browser_render_applies_queued_browser_work_before_scanning() -> None:
                 deck_ids=["1777739665453"], reset_processing_state=True, refresh_unmanaged_notes=True
             )
             state_module.save_persistent_state(col)
+            state_module.load_persistent_state(col)
 
             browser = SimpleNamespace(mw=SimpleNamespace(col=col))
             scheduled: dict[str, object] = {}
@@ -140,6 +142,7 @@ def test_browser_render_runs_unmanaged_refresh_after_partial_scan() -> None:
             state_module.sync_last_sync_mod_ts(200)
             state_module.queue_pending_browser_work(refresh_unmanaged_notes=True)
             state_module.save_persistent_state(col)
+            state_module.load_persistent_state(col)
 
             browser = SimpleNamespace(mw=SimpleNamespace(col=col))
             scheduled: dict[str, object] = {}
@@ -198,6 +201,7 @@ def test_browser_render_clears_stale_sync_watermark_after_scan() -> None:
             state_module.sync_last_processed_mod_ts(300)
             state_module.sync_last_sync_mod_ts(200)
             state_module.save_persistent_state(col)
+            state_module.load_persistent_state(col)
 
             browser = SimpleNamespace(mw=SimpleNamespace(col=col))
             scheduled: dict[str, object] = {}
@@ -250,6 +254,7 @@ def test_browser_render_skips_the_immediate_followup_render_after_scan() -> None
             state_module.sync_last_processed_mod_ts(400)
             state_module.queue_pending_browser_work(reset_processing_state=True)
             state_module.save_persistent_state(col)
+            state_module.load_persistent_state(col)
 
             browser = SimpleNamespace(mw=SimpleNamespace(col=col))
             events: list[str] = []
