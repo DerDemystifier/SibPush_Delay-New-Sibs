@@ -54,6 +54,7 @@ from .state import (
 )
 from .processing.suspension import unsuspend_all_addon_cards_in_deck
 from .processing.suspension import unsuspend_all_addon_cards
+from .ui.browser_actions import add_browser_card_actions
 from .ui.deck_actions import add_deck_actions_to_options_menu
 
 _BROWSER_SCAN_DELAY_MS = 500
@@ -317,6 +318,7 @@ def register_hooks() -> None:
 
     # UI/config hooks.
     hooks.deck_browser_will_show_options_menu.append(add_deck_actions_to_options_menu)
+    hooks.browser_will_show_context_menu.append(add_browser_card_actions)
     hooks.addon_config_editor_will_display_json.append(addon_config_editor_will_display_json)
     hooks.addon_config_editor_will_update_json.append(on_config_save)
     hooks.addons_dialog_will_delete_addons.append(on_addon_delete)
