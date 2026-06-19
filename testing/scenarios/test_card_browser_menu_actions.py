@@ -7,7 +7,6 @@ from anki.consts import QUEUE_TYPE_NEW, QUEUE_TYPE_REV
 from ..addon_utils import patched_addon_state
 from ..card_utils import (
     assert_card_is_ignored,
-    assert_card_is_not_addon_owned,
     assert_card_is_not_ignored,
     assert_card_queues,
     card_custom_data,
@@ -109,7 +108,6 @@ def test_card_browser_ignore_toggle_round_trip() -> None:
             assert_card_queues(col, cards, [QUEUE_TYPE_REV, QUEUE_TYPE_NEW, QUEUE_TYPE_NEW])
             for card in cards:
                 assert_card_is_ignored(col, card)
-                assert_card_is_not_addon_owned(col, card)
                 assert card_custom_data(col, card)["third_party"] == f"card-{cards.index(card) + 1}"
                 assert card_custom_data(col, card)[state_module.ADDON_CUSTOM_DATA_KEY] == state_module.ADDON_CUSTOM_DATA_IGNORED_VALUE
 
@@ -124,7 +122,6 @@ def test_card_browser_ignore_toggle_round_trip() -> None:
             assert_card_queues(col, cards, [QUEUE_TYPE_REV, QUEUE_TYPE_NEW, QUEUE_TYPE_NEW])
             for card in cards:
                 assert_card_is_not_ignored(col, card)
-                assert_card_is_not_addon_owned(col, card)
                 assert card_custom_data(col, card)["third_party"] == f"card-{cards.index(card) + 1}"
                 assert state_module.ADDON_CUSTOM_DATA_KEY not in card_custom_data(col, card)
 

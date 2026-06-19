@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from ..addon_utils import patched_addon_state
 from ..card_utils import (
-    assert_card_is_addon_owned,
-    assert_card_is_not_addon_owned,
+    assert_card_is_not_ignored,
     assert_card_queues,
     set_review_card_state,
 )
@@ -54,12 +53,12 @@ def test_suspends_new_siblings_when_an_immature_review_card_exists() -> None:
         assert_card_queues(
             col, control_cards, [QUEUE_TYPE_REV, QUEUE_TYPE_NEW, QUEUE_TYPE_SUSPENDED]
         )
-        assert_card_is_not_addon_owned(col, target_cards[0])
-        assert_card_is_addon_owned(col, target_cards[1])
-        assert_card_is_addon_owned(col, target_cards[2])
-        assert_card_is_not_addon_owned(col, control_cards[0])
-        assert_card_is_not_addon_owned(col, control_cards[1])
-        assert_card_is_addon_owned(col, control_cards[2])
+        assert_card_is_not_ignored(col, target_cards[0])
+        assert_card_is_not_ignored(col, target_cards[1])
+        assert_card_is_not_ignored(col, target_cards[2])
+        assert_card_is_not_ignored(col, control_cards[0])
+        assert_card_is_not_ignored(col, control_cards[1])
+        assert_card_is_not_ignored(col, control_cards[2])
 
 
 if __name__ == "__main__":

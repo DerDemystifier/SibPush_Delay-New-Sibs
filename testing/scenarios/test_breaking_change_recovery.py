@@ -8,7 +8,7 @@ from unittest.mock import patch
 from anki.consts import QUEUE_TYPE_SUSPENDED
 
 from ..addon_utils import FakeAddonManager, patched_addon_state
-from ..card_utils import card_custom_data, card_is_addon_owned, card_queue
+from ..card_utils import card_custom_data, card_queue
 from ..collection_utils import temporary_collection
 from ..note_utils import add_note_with_siblings, build_test_notetype, make_test_deck_id
 
@@ -89,7 +89,7 @@ def test_browser_render_performs_recovery_when_version_is_missing() -> None:
             suspension_module.suspend_cards(col, [cards[0]], note.id)
 
             assert card_queue(col, cards[0].id) == QUEUE_TYPE_SUSPENDED
-            assert card_is_addon_owned(col, cards[0])
+            assert state_module.ADDON_CUSTOM_DATA_KEY not in card_custom_data(col, cards[0])
             assert state_module.installed_version is None
 
             browser = SimpleNamespace(mw=SimpleNamespace(col=col))
@@ -116,7 +116,7 @@ def test_browser_render_performs_recovery_when_version_is_missing() -> None:
                 events.append(f"scan:{modified_since}")
                 assert state_module.installed_version == state_module.ADDON_VERSION
                 assert card_queue(col, cards[0].id) != QUEUE_TYPE_SUSPENDED
-                assert not card_is_addon_owned(col, cards[0])
+                assert state_module.ADDON_CUSTOM_DATA_KEY not in card_custom_data(col, cards[0])
                 if callable(on_success):
                     on_success()
                 if callable(on_complete):
@@ -132,7 +132,7 @@ def test_browser_render_performs_recovery_when_version_is_missing() -> None:
                 assert callable(scheduled["callback"])
                 assert events == ["migrate"]
                 assert card_queue(col, cards[0].id) != QUEUE_TYPE_SUSPENDED
-                assert not card_is_addon_owned(col, cards[0])
+                assert state_module.ADDON_CUSTOM_DATA_KEY not in card_custom_data(col, cards[0])
 
                 scheduled["callback"]()
 
@@ -281,11 +281,7 @@ def test_collection_did_load_skips_recovery_when_future_version_is_stored() -> N
             assert state_module.installed_version == "3.0.0"
             assert state_module.needs_breaking_change_recovery() is False
             assert card_queue(col, cards[0].id) == QUEUE_TYPE_SUSPENDED
-            assert card_is_addon_owned(col, cards[0])
-            assert (
-                card_custom_data(col, cards[0])[state_module.ADDON_CUSTOM_DATA_KEY]
-                == state_module.ADDON_CUSTOM_DATA_VALUE
-            )
+            assert state_module.ADDON_CUSTOM_DATA_KEY not in card_custom_data(col, cards[0])
             assert json.loads(state_file.read_text(encoding="utf-8")) == {
                 "addon_version": state_module.ADDON_VERSION,
             }

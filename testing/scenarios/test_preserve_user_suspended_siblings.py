@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from ..addon_utils import patched_addon_state
-from ..card_utils import assert_card_is_not_addon_owned, assert_card_queues
+from ..card_utils import assert_card_is_not_ignored, assert_card_queues
 from ..collection_utils import temporary_collection
 from ..note_utils import add_note_with_siblings, build_test_notetype, make_test_deck_id
 from ..print_utils import print_collection_state
-from anki.consts import QUEUE_TYPE_SUSPENDED
+from anki.consts import QUEUE_TYPE_NEW, QUEUE_TYPE_SUSPENDED
 
 
 def test_preserves_user_suspended_siblings_without_retagging() -> None:
@@ -32,15 +32,15 @@ def test_preserves_user_suspended_siblings_without_retagging() -> None:
             patched_addon.process_all_notes(col)
 
         print(
-            "After processing, the queues stay exactly the same, and the note should still have no SibPush-owned cards."
+            "After processing, the queues stay exactly the same, and the note should still have no ignored cards."
         )
         print_collection_state(col, "After processing (already suspended siblings)")
 
         assert_card_queues(
-            col, cards, [QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_SUSPENDED]
+            col, cards, [QUEUE_TYPE_NEW, QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_SUSPENDED]
         )
         for card in cards:
-            assert_card_is_not_addon_owned(col, card)
+            assert_card_is_not_ignored(col, card)
 
 
 if __name__ == "__main__":

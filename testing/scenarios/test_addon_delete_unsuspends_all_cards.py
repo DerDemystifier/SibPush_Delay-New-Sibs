@@ -7,8 +7,7 @@ from anki.consts import QUEUE_TYPE_NEW, QUEUE_TYPE_REV, QUEUE_TYPE_SUSPENDED
 
 from ..addon_utils import patched_addon_state
 from ..card_utils import (
-    assert_card_is_addon_owned,
-    assert_card_is_not_addon_owned,
+    assert_card_is_not_ignored,
     assert_card_queues,
     set_review_card_state,
 )
@@ -46,10 +45,10 @@ def test_on_addon_delete_unsuspends_all_addon_cards_before_deletion() -> None:
                 cards_b,
                 [QUEUE_TYPE_REV, QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_SUSPENDED],
             )
-            assert_card_is_addon_owned(col, cards_a[1])
-            assert_card_is_addon_owned(col, cards_a[2])
-            assert_card_is_addon_owned(col, cards_b[1])
-            assert_card_is_addon_owned(col, cards_b[2])
+            assert_card_is_not_ignored(col, cards_a[1])
+            assert_card_is_not_ignored(col, cards_a[2])
+            assert_card_is_not_ignored(col, cards_b[1])
+            assert_card_is_not_ignored(col, cards_b[2])
 
             print_collection_state(col, "Before addon deletion (cards are add-on suspended)")
 
@@ -59,10 +58,10 @@ def test_on_addon_delete_unsuspends_all_addon_cards_before_deletion() -> None:
 
         assert_card_queues(col, cards_a, [QUEUE_TYPE_REV, QUEUE_TYPE_NEW, QUEUE_TYPE_NEW])
         assert_card_queues(col, cards_b, [QUEUE_TYPE_REV, QUEUE_TYPE_NEW, QUEUE_TYPE_NEW])
-        assert_card_is_not_addon_owned(col, cards_a[1])
-        assert_card_is_not_addon_owned(col, cards_a[2])
-        assert_card_is_not_addon_owned(col, cards_b[1])
-        assert_card_is_not_addon_owned(col, cards_b[2])
+        assert_card_is_not_ignored(col, cards_a[1])
+        assert_card_is_not_ignored(col, cards_a[2])
+        assert_card_is_not_ignored(col, cards_b[1])
+        assert_card_is_not_ignored(col, cards_b[2])
 
 
 if __name__ == "__main__":

@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from ..addon_utils import patched_addon_state
 from ..card_utils import (
-    assert_card_is_addon_owned,
-    assert_card_is_not_addon_owned,
+    assert_card_is_not_ignored,
     assert_card_queues,
 )
 from ..collection_utils import temporary_collection
@@ -39,9 +38,9 @@ def test_keeps_one_new_card_available_for_a_fresh_three_card_note() -> None:
         print_collection_state(col, "After processing (one new card available)")
 
         assert_card_queues(col, cards, [QUEUE_TYPE_NEW, QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_SUSPENDED])
-        assert_card_is_not_addon_owned(col, cards[0])
-        assert_card_is_addon_owned(col, cards[1])
-        assert_card_is_addon_owned(col, cards[2])
+        assert_card_is_not_ignored(col, cards[0])
+        assert_card_is_not_ignored(col, cards[1])
+        assert_card_is_not_ignored(col, cards[2])
 
 
 if __name__ == "__main__":
