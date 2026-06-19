@@ -80,6 +80,7 @@ def test_deck_browser_submenu_toggles_ignore_and_sets_interval() -> None:
             assert [action.text for action in submenu.actions] == [
                 "Ignore current deck",
                 "Set custom interval…",
+                "Show ignored cards…",
             ]
 
             submenu.actions[0].triggered.callbacks[0]()
