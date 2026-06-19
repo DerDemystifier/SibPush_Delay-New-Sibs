@@ -7,8 +7,7 @@ from anki.consts import QUEUE_TYPE_REV, QUEUE_TYPE_SUSPENDED
 
 from ..addon_utils import FakeAddonManager, patched_addon_state
 from ..card_utils import (
-    assert_card_is_addon_owned,
-    assert_card_is_not_addon_owned,
+    assert_card_is_not_ignored,
     assert_card_queues,
     set_review_card_state,
 )
@@ -28,8 +27,8 @@ def test_update_custom_deck_rule_unsuspends_cards_when_deck_becomes_ignored() ->
     Scenario: Case when a deck already has add-on-suspended cards and a UI-driven config save
     marks that deck as ignored.
 
-    The helper should persist the new rule, refresh the runtime caches, and undo the addon-owned
-    suspension work for the deck.
+    The helper should persist the new rule, refresh the runtime caches, and keep the deck's
+    suspension state aligned with the new rule.
     """
 
     with temporary_collection() as col:
@@ -71,16 +70,16 @@ def test_update_custom_deck_rule_unsuspends_cards_when_deck_becomes_ignored() ->
             patched_addon.process_all_notes(col)
 
             print(
-                "After processing, the add-on has suspended the new siblings and marked the cards as addon-owned."
+                "After processing, the add-on has suspended the new siblings without marking them ignored."
             )
             print_collection_state(col, "After processing (suspended by add-on)")
 
             assert_card_queues(
                 col, cards, [QUEUE_TYPE_REV, QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_SUSPENDED]
             )
-            assert_card_is_not_addon_owned(col, cards[0])
-            assert_card_is_addon_owned(col, cards[1])
-            assert_card_is_addon_owned(col, cards[2])
+            assert_card_is_not_ignored(col, cards[0])
+            assert_card_is_not_ignored(col, cards[1])
+            assert_card_is_not_ignored(col, cards[2])
 
             parser_module.update_custom_deck_rule(
                 str(deck_id), "Ignored deck cleanup note", ignored=True, interval=21
@@ -107,9 +106,9 @@ def test_update_custom_deck_rule_unsuspends_cards_when_deck_becomes_ignored() ->
             "debug": False,
         }
         assert_card_queues(col, cards, [QUEUE_TYPE_REV, QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_SUSPENDED])
-        assert_card_is_not_addon_owned(col, cards[0])
-        assert_card_is_addon_owned(col, cards[1])
-        assert_card_is_addon_owned(col, cards[2])
+        assert_card_is_not_ignored(col, cards[0])
+        assert_card_is_not_ignored(col, cards[1])
+        assert_card_is_not_ignored(col, cards[2])
 
 
 if __name__ == "__main__":

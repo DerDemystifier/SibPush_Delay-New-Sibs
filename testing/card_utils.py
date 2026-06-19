@@ -18,7 +18,6 @@ if TYPE_CHECKING:
 
 _addon_constants_state = SimpleNamespace(
     ADDON_CUSTOM_DATA_KEY="",
-    ADDON_CUSTOM_DATA_VALUE="",
     ADDON_CUSTOM_DATA_IGNORED_VALUE="",
     CONFIG_IGNORED_KEY="",
 )
@@ -26,7 +25,6 @@ _addon_constants_state = SimpleNamespace(
 
 def set_addon_constants(addon: object) -> None:
     _addon_constants_state.ADDON_CUSTOM_DATA_KEY = getattr(addon, "ADDON_CUSTOM_DATA_KEY", "")
-    _addon_constants_state.ADDON_CUSTOM_DATA_VALUE = getattr(addon, "ADDON_CUSTOM_DATA_VALUE", "")
     _addon_constants_state.ADDON_CUSTOM_DATA_IGNORED_VALUE = getattr(
         addon, "ADDON_CUSTOM_DATA_IGNORED_VALUE", ""
     )
@@ -73,27 +71,12 @@ def card_custom_data(col: "Collection", card: "Card") -> dict[str, object]:
     return _load_custom_data(col.get_card(card.id))
 
 
-def set_addon_custom_data(col: "Collection", card: "Card") -> None:
-    addon = _addon_constants()
-    data = card_custom_data(col, card)
-    data[getattr(addon, "ADDON_CUSTOM_DATA_KEY")] = getattr(addon, "ADDON_CUSTOM_DATA_VALUE")
-    set_card_custom_data(col, card, data)
-
-
 def set_card_ignored(col: "Collection", card: "Card") -> None:
     addon = _addon_constants()
     data = card_custom_data(col, card)
     data[getattr(addon, "ADDON_CUSTOM_DATA_KEY")] = getattr(
         addon, "ADDON_CUSTOM_DATA_IGNORED_VALUE"
     )
-    set_card_custom_data(col, card, data)
-
-
-def clear_addon_custom_data(col: "Collection", card: "Card") -> None:
-    addon = _addon_constants()
-    data = card_custom_data(col, card)
-    if data.pop(getattr(addon, "ADDON_CUSTOM_DATA_KEY"), None) is None:
-        return
     set_card_custom_data(col, card, data)
 
 
@@ -105,13 +88,6 @@ def clear_card_ignored(col: "Collection", card: "Card") -> None:
     set_card_custom_data(col, card, data)
 
 
-def card_is_addon_owned(col: "Collection", card: "Card") -> bool:
-    addon = _addon_constants()
-    return card_custom_data(col, card).get(getattr(addon, "ADDON_CUSTOM_DATA_KEY")) == getattr(
-        addon, "ADDON_CUSTOM_DATA_VALUE"
-    )
-
-
 def card_is_ignored(col: "Collection", card: "Card") -> bool:
     addon = _addon_constants()
     return card_custom_data(col, card).get(getattr(addon, "ADDON_CUSTOM_DATA_KEY")) == getattr(
@@ -119,16 +95,8 @@ def card_is_ignored(col: "Collection", card: "Card") -> bool:
     )
 
 
-def assert_card_is_addon_owned(col: "Collection", card: "Card") -> None:
-    assert card_is_addon_owned(col, card), f"Card {card.id} should be marked as SibPush-owned"
-
-
 def assert_card_is_ignored(col: "Collection", card: "Card") -> None:
     assert card_is_ignored(col, card), f"Card {card.id} should be marked as ignored"
-
-
-def assert_card_is_not_addon_owned(col: "Collection", card: "Card") -> None:
-    assert not card_is_addon_owned(col, card), f"Card {card.id} should not be marked as SibPush-owned"
 
 
 def assert_card_is_not_ignored(col: "Collection", card: "Card") -> None:

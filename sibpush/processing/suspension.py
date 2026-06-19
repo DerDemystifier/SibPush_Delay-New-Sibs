@@ -17,7 +17,6 @@ from aqt.utils import tooltip
 from ..state import (
     ADDON_CUSTOM_DATA_IGNORED_VALUE,
     ADDON_CUSTOM_DATA_KEY,
-    ADDON_CUSTOM_DATA_VALUE,
     CONFIG_IGNORED_KEY,
 )
 from .query import get_deck_rule
@@ -62,21 +61,8 @@ def _write_custom_data(col: Collection, card: Card, custom_data: dict[str, Any])
     col.update_card(fresh_card)
 
 
-def _set_addon_custom_data(col: Collection, card: Card) -> bool:
-    """Mark a card as SibPush-owned while preserving other custom_data keys."""
-
-    fresh_card = col.get_card(card.id)
-    custom_data = _load_custom_data(fresh_card)
-    if custom_data.get(ADDON_CUSTOM_DATA_KEY) == ADDON_CUSTOM_DATA_VALUE:
-        return False
-
-    custom_data[ADDON_CUSTOM_DATA_KEY] = ADDON_CUSTOM_DATA_VALUE
-    _write_custom_data(col, fresh_card, custom_data)
-    return True
-
-
 def _clear_addon_custom_data(col: Collection, card: Card) -> bool:
-    """Remove SibPush ownership from a card while preserving other custom_data keys."""
+    """Remove SibPush custom_data from a card while preserving other custom_data keys."""
 
     fresh_card = col.get_card(card.id)
     custom_data = _load_custom_data(fresh_card)
@@ -97,9 +83,9 @@ def card_is_ignored(card: Card) -> bool:
 def set_card_ignored(col: Collection, card: Card) -> None:
     """Mark a card as ignored while preserving other custom_data keys."""
 
-    if card_is_addon_owned(card):
+    fresh_card = col.get_card(card.id)
+    if fresh_card.queue == QUEUE_TYPE_SUSPENDED:
         col.sched.unsuspend_cards([card.id])
-        _clear_addon_custom_data(col, card)
 
     fresh_card = col.get_card(card.id)
     custom_data = _load_custom_data(fresh_card)
@@ -110,23 +96,11 @@ def set_card_ignored(col: Collection, card: Card) -> None:
 def clear_card_ignored(col: Collection, card: Card) -> None:
     """Remove the ignored marker from a card while preserving other custom_data keys."""
 
-    fresh_card = col.get_card(card.id)
-    custom_data = _load_custom_data(fresh_card)
-    if ADDON_CUSTOM_DATA_KEY not in custom_data:
-        return
-
-    custom_data.pop(ADDON_CUSTOM_DATA_KEY, None)
-    _write_custom_data(col, fresh_card, custom_data)
-
-
-def card_is_addon_owned(card: Card) -> bool:
-    """Return whether a card is marked as SibPush-owned."""
-
-    return _load_custom_data(card).get(ADDON_CUSTOM_DATA_KEY) == ADDON_CUSTOM_DATA_VALUE
+    _clear_addon_custom_data(col, card)
 
 
 def suspend_cards(col: Collection, cards_to_suspend: Sequence[Card], note_id: NoteId) -> None:
-    """Suspend a group of cards and mark each card as managed by the add-on.
+    """Suspend a group of cards.
 
     Args:
         col (anki.collection.Collection): The collection that owns the cards.
@@ -142,9 +116,6 @@ def suspend_cards(col: Collection, cards_to_suspend: Sequence[Card], note_id: No
         return
 
     col.sched.suspend_cards([card.id for card in cards_to_suspend])
-
-    for card in cards_to_suspend:
-        _set_addon_custom_data(col, card)
 
 
 def note_is_ignored_deck(card: Card) -> bool:
@@ -174,7 +145,7 @@ def unsuspend_all_addon_cards_in_deck(col: Collection, deck_id: str) -> None:
 
     card_ids_to_unsuspend: list[CardId] = []
 
-    for card_id in col.find_cards(f"did:{deck_id} has-cd:{ADDON_CUSTOM_DATA_KEY} is:suspended"):
+    for card_id in col.find_cards(f"did:{deck_id} is:suspended"):
         card = col.get_card(card_id)
         if card.queue == QUEUE_TYPE_SUSPENDED:
             card_ids_to_unsuspend.append(card.id)
@@ -191,8 +162,7 @@ def unsuspend_all_addon_cards_in_deck(col: Collection, deck_id: str) -> None:
         )
 
     def _finish_unsuspending() -> None:
-        for card_id in card_ids_to_unsuspend:
-            _clear_addon_custom_data(col, col.get_card(card_id))
+        return
 
     if total_count <= DECK_UNSUSPEND_BATCH_SIZE:
         col.sched.unsuspend_cards(card_ids_to_unsuspend)
@@ -250,7 +220,7 @@ def unsuspend_all_addon_cards(
 
     card_ids_to_unsuspend: list[CardId] = []
 
-    for card_id in col.find_cards(f"has-cd:{ADDON_CUSTOM_DATA_KEY} is:suspended"):
+    for card_id in col.find_cards("is:suspended"):
         card = col.get_card(card_id)
         if card.queue != QUEUE_TYPE_SUSPENDED:
             continue
@@ -268,8 +238,6 @@ def unsuspend_all_addon_cards(
                 start_index : start_index + DECK_UNSUSPEND_BATCH_SIZE
             ]
             col.sched.unsuspend_cards(chunk)
-            for card_id in chunk:
-                _clear_addon_custom_data(col, col.get_card(card_id))
 
         if on_complete is not None:
             on_complete()
@@ -292,8 +260,6 @@ def unsuspend_all_addon_cards(
                 return
 
             col.sched.unsuspend_cards(chunk)
-            for card_id in chunk:
-                _clear_addon_custom_data(col, col.get_card(card_id))
 
             displayed_count = min(total_count, displayed_count + len(chunk))
 

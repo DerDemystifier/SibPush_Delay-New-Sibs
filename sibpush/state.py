@@ -69,7 +69,6 @@ def _default_pending_browser_work() -> dict[str, Any]:
 _pending_browser_work = _default_pending_browser_work()
 
 ADDON_CUSTOM_DATA_KEY = "sibpush"
-ADDON_CUSTOM_DATA_VALUE = "suspended"
 ADDON_CUSTOM_DATA_IGNORED_VALUE = "ignored"
 CONFIG_IGNORED_KEY = ADDON_CUSTOM_DATA_IGNORED_VALUE
 ADDON_VERSION = "2.0.0"  # Update this when releasing a new version

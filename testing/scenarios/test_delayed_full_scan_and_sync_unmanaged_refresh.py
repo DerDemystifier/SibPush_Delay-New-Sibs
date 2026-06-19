@@ -8,8 +8,7 @@ from anki.consts import QUEUE_TYPE_NEW, QUEUE_TYPE_SUSPENDED
 
 from ..addon_utils import patched_addon_state
 from ..card_utils import (
-    assert_card_is_addon_owned,
-    assert_card_is_not_addon_owned,
+    assert_card_is_not_ignored,
     assert_card_queues,
 )
 from ..collection_utils import temporary_collection
@@ -51,9 +50,9 @@ def test_browser_render_delays_the_initial_full_scan() -> None:
 
             assert scheduled["delay_ms"] == 500
             assert callable(scheduled["callback"])
-            assert_card_is_not_addon_owned(col, cards[0])
-            assert_card_is_not_addon_owned(col, cards[1])
-            assert_card_is_not_addon_owned(col, cards[2])
+            assert_card_is_not_ignored(col, cards[0])
+            assert_card_is_not_ignored(col, cards[1])
+            assert_card_is_not_ignored(col, cards[2])
 
             print("After the browser render, the full scan is still pending because it was deferred.")
             print_collection_state(col, "After browser render before delayed scan runs")
@@ -64,9 +63,9 @@ def test_browser_render_delays_the_initial_full_scan() -> None:
         print_collection_state(col, "After delayed browser scan")
 
         assert_card_queues(col, cards, [QUEUE_TYPE_NEW, QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_SUSPENDED])
-        assert_card_is_not_addon_owned(col, cards[0])
-        assert_card_is_addon_owned(col, cards[1])
-        assert_card_is_addon_owned(col, cards[2])
+        assert_card_is_not_ignored(col, cards[0])
+        assert_card_is_not_ignored(col, cards[1])
+        assert_card_is_not_ignored(col, cards[2])
 
 
 def test_sync_finish_processes_only_unmanaged_new_notes() -> None:
@@ -96,23 +95,23 @@ def test_sync_finish_processes_only_unmanaged_new_notes() -> None:
             patched_addon.process_all_notes(col)
 
             print(
-                "After the initial full scan, the managed note's cards are marked as addon-owned and partially suspended."
+                "After the initial full scan, the managed note's cards are processed by SibPush and partially suspended."
             )
             print_collection_state(col, "After initial full scan")
 
             assert_card_queues(
                 col, managed_cards, [QUEUE_TYPE_NEW, QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_SUSPENDED]
             )
-            assert_card_is_not_addon_owned(col, managed_cards[0])
-            assert_card_is_addon_owned(col, managed_cards[1])
-            assert_card_is_addon_owned(col, managed_cards[2])
+            assert_card_is_not_ignored(col, managed_cards[0])
+            assert_card_is_not_ignored(col, managed_cards[1])
+            assert_card_is_not_ignored(col, managed_cards[2])
 
             assert_card_queues(
                 col, new_cards, [QUEUE_TYPE_NEW, QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_SUSPENDED]
             )
-            assert_card_is_not_addon_owned(col, new_cards[0])
-            assert_card_is_addon_owned(col, new_cards[1])
-            assert_card_is_addon_owned(col, new_cards[2])
+            assert_card_is_not_ignored(col, new_cards[0])
+            assert_card_is_not_ignored(col, new_cards[1])
+            assert_card_is_not_ignored(col, new_cards[2])
 
             hooks_module.sync_did_finish()
 
@@ -125,15 +124,15 @@ def test_sync_finish_processes_only_unmanaged_new_notes() -> None:
             assert_card_queues(
                 col, managed_cards, [QUEUE_TYPE_NEW, QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_SUSPENDED]
             )
-            assert_card_is_not_addon_owned(col, managed_cards[0])
-            assert_card_is_addon_owned(col, managed_cards[1])
-            assert_card_is_addon_owned(col, managed_cards[2])
+            assert_card_is_not_ignored(col, managed_cards[0])
+            assert_card_is_not_ignored(col, managed_cards[1])
+            assert_card_is_not_ignored(col, managed_cards[2])
             assert_card_queues(
                 col, new_cards, [QUEUE_TYPE_NEW, QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_SUSPENDED]
             )
-            assert_card_is_not_addon_owned(col, new_cards[0])
-            assert_card_is_addon_owned(col, new_cards[1])
-            assert_card_is_addon_owned(col, new_cards[2])
+            assert_card_is_not_ignored(col, new_cards[0])
+            assert_card_is_not_ignored(col, new_cards[1])
+            assert_card_is_not_ignored(col, new_cards[2])
 
             hooks_module.browser_render(browser)
 
@@ -143,15 +142,15 @@ def test_sync_finish_processes_only_unmanaged_new_notes() -> None:
         assert_card_queues(
             col, managed_cards, [QUEUE_TYPE_NEW, QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_SUSPENDED]
         )
-        assert_card_is_not_addon_owned(col, managed_cards[0])
-        assert_card_is_addon_owned(col, managed_cards[1])
-        assert_card_is_addon_owned(col, managed_cards[2])
+        assert_card_is_not_ignored(col, managed_cards[0])
+        assert_card_is_not_ignored(col, managed_cards[1])
+        assert_card_is_not_ignored(col, managed_cards[2])
         assert_card_queues(
             col, new_cards, [QUEUE_TYPE_NEW, QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_SUSPENDED]
         )
-        assert_card_is_not_addon_owned(col, new_cards[0])
-        assert_card_is_addon_owned(col, new_cards[1])
-        assert_card_is_addon_owned(col, new_cards[2])
+        assert_card_is_not_ignored(col, new_cards[0])
+        assert_card_is_not_ignored(col, new_cards[1])
+        assert_card_is_not_ignored(col, new_cards[2])
 
 
 def test_collection_did_temporarily_close_queues_a_full_reset() -> None:

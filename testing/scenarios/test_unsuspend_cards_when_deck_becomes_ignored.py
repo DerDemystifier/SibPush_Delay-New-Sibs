@@ -7,8 +7,7 @@ from anki.consts import QUEUE_TYPE_REV, QUEUE_TYPE_SUSPENDED
 
 from ..addon_utils import patched_addon_state
 from ..card_utils import (
-    assert_card_is_addon_owned,
-    assert_card_is_not_addon_owned,
+    assert_card_is_not_ignored,
     assert_card_queues,
     set_review_card_state,
 )
@@ -56,16 +55,16 @@ def test_on_config_save_unsuspends_addon_cards_for_newly_ignored_deck() -> None:
             patched_addon.process_all_notes(col)
 
             print(
-                "After processing, the add-on has suspended the new siblings and marked the cards as addon-owned."
+                "After processing, the add-on has suspended the new siblings without marking them ignored."
             )
             print_collection_state(col, "After processing (suspended by add-on)")
 
             assert_card_queues(
                 col, cards, [QUEUE_TYPE_REV, QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_SUSPENDED]
             )
-            assert_card_is_not_addon_owned(col, cards[0])
-            assert_card_is_addon_owned(col, cards[1])
-            assert_card_is_addon_owned(col, cards[2])
+            assert_card_is_not_ignored(col, cards[0])
+            assert_card_is_not_ignored(col, cards[1])
+            assert_card_is_not_ignored(col, cards[2])
 
             ignored_rule = {
                 "did": str(deck_id),
@@ -96,9 +95,9 @@ def test_on_config_save_unsuspends_addon_cards_for_newly_ignored_deck() -> None:
         print_collection_state(col, "After config save (cleanup queued, not yet run)")
 
         assert_card_queues(col, cards, [QUEUE_TYPE_REV, QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_SUSPENDED])
-        assert_card_is_not_addon_owned(col, cards[0])
-        assert_card_is_addon_owned(col, cards[1])
-        assert_card_is_addon_owned(col, cards[2])
+        assert_card_is_not_ignored(col, cards[0])
+        assert_card_is_not_ignored(col, cards[1])
+        assert_card_is_not_ignored(col, cards[2])
 
 
 if __name__ == "__main__":

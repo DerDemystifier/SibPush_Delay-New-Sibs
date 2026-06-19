@@ -6,8 +6,7 @@ from anki.consts import QUEUE_TYPE_NEW, QUEUE_TYPE_REV, QUEUE_TYPE_SUSPENDED
 
 from ..addon_utils import patched_addon_state
 from ..card_utils import (
-    assert_card_is_addon_owned,
-    assert_card_is_not_addon_owned,
+    assert_card_is_not_ignored,
     assert_card_queues,
     set_review_card_state,
 )
@@ -75,12 +74,12 @@ def test_tag_rule_takes_precedence_over_custom_deck_interval() -> None:
         assert_card_queues(
             col, control_cards, [QUEUE_TYPE_REV, QUEUE_TYPE_NEW, QUEUE_TYPE_SUSPENDED]
         )
-        assert_card_is_not_addon_owned(col, tagged_cards[0])
-        assert_card_is_addon_owned(col, tagged_cards[1])
-        assert_card_is_addon_owned(col, tagged_cards[2])
-        assert_card_is_not_addon_owned(col, control_cards[0])
-        assert_card_is_not_addon_owned(col, control_cards[1])
-        assert_card_is_addon_owned(col, control_cards[2])
+        assert_card_is_not_ignored(col, tagged_cards[0])
+        assert_card_is_not_ignored(col, tagged_cards[1])
+        assert_card_is_not_ignored(col, tagged_cards[2])
+        assert_card_is_not_ignored(col, control_cards[0])
+        assert_card_is_not_ignored(col, control_cards[1])
+        assert_card_is_not_ignored(col, control_cards[2])
 
 
 def test_ignored_deck_skips_matching_tag_rule() -> None:
@@ -145,12 +144,12 @@ def test_ignored_deck_skips_matching_tag_rule() -> None:
         assert_card_queues(
             col, ignored_cards, [QUEUE_TYPE_REV, QUEUE_TYPE_NEW, QUEUE_TYPE_NEW]
         )
-        assert_card_is_not_addon_owned(col, active_cards[0])
-        assert_card_is_addon_owned(col, active_cards[1])
-        assert_card_is_addon_owned(col, active_cards[2])
-        assert_card_is_not_addon_owned(col, ignored_cards[0])
-        assert_card_is_not_addon_owned(col, ignored_cards[1])
-        assert_card_is_not_addon_owned(col, ignored_cards[2])
+        assert_card_is_not_ignored(col, active_cards[0])
+        assert_card_is_not_ignored(col, active_cards[1])
+        assert_card_is_not_ignored(col, active_cards[2])
+        assert_card_is_not_ignored(col, ignored_cards[0])
+        assert_card_is_not_ignored(col, ignored_cards[1])
+        assert_card_is_not_ignored(col, ignored_cards[2])
 
 
 if __name__ == "__main__":

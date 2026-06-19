@@ -6,8 +6,7 @@ from anki.consts import QUEUE_TYPE_NEW, QUEUE_TYPE_SUSPENDED
 
 from ..addon_utils import patched_addon_state
 from ..card_utils import (
-    assert_card_is_addon_owned,
-    assert_card_is_not_addon_owned,
+    assert_card_is_not_ignored,
     assert_card_queues,
 )
 from ..collection_utils import temporary_collection
@@ -59,12 +58,12 @@ def test_ignores_custom_deck_rule_by_deck_id() -> None:
             col, active_cards, [QUEUE_TYPE_NEW, QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_SUSPENDED]
         )
         assert_card_queues(col, ignored_cards, [QUEUE_TYPE_NEW, QUEUE_TYPE_NEW, QUEUE_TYPE_NEW])
-        assert_card_is_not_addon_owned(col, active_cards[0])
-        assert_card_is_addon_owned(col, active_cards[1])
-        assert_card_is_addon_owned(col, active_cards[2])
-        assert_card_is_not_addon_owned(col, ignored_cards[0])
-        assert_card_is_not_addon_owned(col, ignored_cards[1])
-        assert_card_is_not_addon_owned(col, ignored_cards[2])
+        assert_card_is_not_ignored(col, active_cards[0])
+        assert_card_is_not_ignored(col, active_cards[1])
+        assert_card_is_not_ignored(col, active_cards[2])
+        assert_card_is_not_ignored(col, ignored_cards[0])
+        assert_card_is_not_ignored(col, ignored_cards[1])
+        assert_card_is_not_ignored(col, ignored_cards[2])
 
 
 if __name__ == "__main__":

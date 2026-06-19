@@ -1,21 +1,19 @@
 from __future__ import annotations
 
 from ..addon_utils import patched_addon_state
-from ..card_utils import (
-    assert_card_queues,
-)
+from ..card_utils import assert_card_queues
 from ..collection_utils import temporary_collection
 from ..note_utils import add_note_with_siblings, build_test_notetype, make_test_deck_id
 from ..print_utils import print_collection_state
 from anki.consts import QUEUE_TYPE_NEW, QUEUE_TYPE_SUSPENDED
 
 
-def test_manual_unsuspend_of_addon_owned_new_card_is_reprocessed_and_suspended_again() -> None:
+def test_manual_unsuspend_of_non_ignored_new_card_is_reprocessed_and_suspended_again() -> None:
     """
     Scenario: Case when a user manually unsuspends a new card that was suspended by the add-on.
 
     The add-on should treat the card as a reintroduced new sibling, process it again, and re-suspend
-    it with the SibPush ownership marker restored.
+    it.
     """
     with temporary_collection() as col:
         model = build_test_notetype(col)
@@ -33,11 +31,11 @@ def test_manual_unsuspend_of_addon_owned_new_card_is_reprocessed_and_suspended_a
             )
             print_collection_state(col, "After initial processing")
 
-            # Simulate the user manually unsuspending an add-on-owned new sibling.
+            # Simulate the user manually unsuspending a new sibling.
             col.sched.unsuspend_cards([cards[1].id])
 
             print(
-                "After manual unsuspend: the trailing sibling is active again, but its ownership marker was removed by Anki's custom-data reset."
+                "After manual unsuspend: the trailing sibling is active again, and its custom-data state has been reset by Anki."
             )
             print_collection_state(col, "After manual unsuspend")
 
@@ -52,4 +50,4 @@ def test_manual_unsuspend_of_addon_owned_new_card_is_reprocessed_and_suspended_a
 
 
 if __name__ == "__main__":
-    test_manual_unsuspend_of_addon_owned_new_card_is_reprocessed_and_suspended_again()
+    test_manual_unsuspend_of_non_ignored_new_card_is_reprocessed_and_suspended_again()
