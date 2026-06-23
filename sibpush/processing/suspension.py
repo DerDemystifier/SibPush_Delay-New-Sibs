@@ -61,12 +61,12 @@ def _write_custom_data(col: Collection, card: Card, custom_data: dict[str, Any])
     col.update_card(fresh_card)
 
 
-def _clear_addon_custom_data(col: Collection, card: Card) -> bool:
-    """Remove SibPush custom_data from a card while preserving other custom_data keys."""
+def _clear_addon_ignored_marker(col: Collection, card: Card) -> bool:
+    """Remove SibPush's ignored marker from a card while preserving other custom_data keys."""
 
     fresh_card = col.get_card(card.id)
     custom_data = _load_custom_data(fresh_card)
-    if ADDON_CUSTOM_DATA_KEY not in custom_data:
+    if custom_data.get(ADDON_CUSTOM_DATA_KEY) != ADDON_CUSTOM_DATA_IGNORED_VALUE:
         return False
 
     custom_data.pop(ADDON_CUSTOM_DATA_KEY, None)
@@ -96,7 +96,7 @@ def set_card_ignored(col: Collection, card: Card) -> None:
 def clear_card_ignored(col: Collection, card: Card) -> None:
     """Remove the ignored marker from a card while preserving other custom_data keys."""
 
-    _clear_addon_custom_data(col, card)
+    _clear_addon_ignored_marker(col, card)
 
 
 def suspend_cards(col: Collection, cards_to_suspend: Sequence[Card], note_id: NoteId) -> None:
@@ -145,10 +145,15 @@ def unsuspend_all_addon_cards_in_deck(col: Collection, deck_id: str) -> None:
 
     card_ids_to_unsuspend: list[CardId] = []
 
-    for card_id in col.find_cards(f"did:{deck_id} is:suspended"):
+    for card_id in col.find_cards(f"did:{deck_id} is:new is:suspended"):
         card = col.get_card(card_id)
-        if card.queue == QUEUE_TYPE_SUSPENDED:
-            card_ids_to_unsuspend.append(card.id)
+        if card.queue != QUEUE_TYPE_SUSPENDED:
+            continue
+
+        if card_is_ignored(card):
+            continue
+
+        card_ids_to_unsuspend.append(card.id)
 
     if not card_ids_to_unsuspend:
         return
@@ -220,9 +225,12 @@ def unsuspend_all_addon_cards(
 
     card_ids_to_unsuspend: list[CardId] = []
 
-    for card_id in col.find_cards("is:suspended"):
+    for card_id in col.find_cards("is:new is:suspended"):
         card = col.get_card(card_id)
         if card.queue != QUEUE_TYPE_SUSPENDED:
+            continue
+
+        if card_is_ignored(card):
             continue
 
         card_ids_to_unsuspend.append(card.id)

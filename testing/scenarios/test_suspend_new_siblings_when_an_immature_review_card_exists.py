@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from importlib import import_module
+
 from ..addon_utils import patched_addon_state
 from ..card_utils import (
     assert_card_is_not_ignored,
     assert_card_queues,
+    card_custom_data,
     set_review_card_state,
 )
 from ..collection_utils import temporary_collection
@@ -61,5 +64,34 @@ def test_suspends_new_siblings_when_an_immature_review_card_exists() -> None:
         assert_card_is_not_ignored(col, control_cards[2])
 
 
+def test_suspended_immature_review_card_does_not_block_new_siblings() -> None:
+    """A suspended immature sibling should stay transparent to sibling release."""
+
+    with temporary_collection() as col:
+        model = build_test_notetype(col)
+        deck_id = make_test_deck_id(col)
+
+        note, cards = add_note_with_siblings(col, model, deck_id, "Suspended immature note")
+        set_review_card_state(col, cards[0], ivl=10)
+        col.sched.suspend_cards([cards[0].id])
+
+        with patched_addon_state(col) as patched_addon:
+            addon = patched_addon
+            state_module = import_module(f"{addon.__name__}.sibpush.state")
+
+            patched_addon.process_all_notes(col)
+
+            assert_card_queues(
+                col, cards, [QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_NEW, QUEUE_TYPE_SUSPENDED]
+            )
+            assert_card_is_not_ignored(col, cards[0])
+            assert_card_is_not_ignored(col, cards[1])
+            assert_card_is_not_ignored(col, cards[2])
+            assert card_custom_data(col, cards[0]).get(state_module.ADDON_CUSTOM_DATA_KEY) is None
+            assert card_custom_data(col, cards[1]).get(state_module.ADDON_CUSTOM_DATA_KEY) is None
+            assert card_custom_data(col, cards[2]).get(state_module.ADDON_CUSTOM_DATA_KEY) is None
+
+
 if __name__ == "__main__":
     test_suspends_new_siblings_when_an_immature_review_card_exists()
+    test_suspended_immature_review_card_does_not_block_new_siblings()

@@ -11,6 +11,9 @@ from testing.scenarios.test_custom_deck_interval_overrides_default_interval impo
 from testing.scenarios.test_deck_actions_save_and_refresh import (
     test_update_custom_deck_rule_unsuspends_cards_when_deck_becomes_ignored,
 )
+from testing.scenarios.test_addon_delete_unsuspends_all_cards import (
+    test_on_addon_delete_unsuspends_all_non_ignored_new_cards_before_deletion,
+)
 from testing.scenarios.test_deck_browser_menu_actions import (
     test_deck_browser_submenu_toggles_ignore_and_sets_interval,
 )
@@ -65,6 +68,7 @@ from testing.scenarios.test_suspend_new_siblings_when_an_immature_review_card_ex
 )
 from testing.scenarios.test_unsuspend_cards_when_deck_becomes_ignored import (
     test_on_config_save_unsuspends_addon_cards_for_newly_ignored_deck,
+    test_unsuspend_all_addon_cards_in_deck_unsuspends_non_ignored_new_cards_only,
 )
 from testing.scenarios.test_tag_rule_precedence_and_ignored_deck_behavior import (
     test_ignored_deck_skips_matching_tag_rule,
@@ -73,8 +77,11 @@ from testing.scenarios.test_tag_rule_precedence_and_ignored_deck_behavior import
 from testing.scenarios.test_breaking_change_recovery import (
     test_needs_breaking_change_recovery_uses_the_version_floor,
     test_browser_render_performs_recovery_when_version_is_missing,
-    test_browser_render_migrates_legacy_suspension_tags,
+    test_browser_render_reprocesses_legacy_suspension_tags_before_scan,
     test_collection_did_load_skips_recovery_when_future_version_is_stored,
+)
+from testing.scenarios.test_suspend_new_siblings_when_an_immature_review_card_exists import (
+    test_suspended_immature_review_card_does_not_block_new_siblings,
 )
 
 
@@ -106,14 +113,17 @@ tests = {
     "test_sync_did_finish_persists_the_sync_watermark": test_sync_did_finish_persists_the_sync_watermark,
     "test_custom_deck_interval_overrides_default_interval": test_custom_deck_interval_overrides_default_interval,
     "test_update_custom_deck_rule_unsuspends_cards_when_deck_becomes_ignored": test_update_custom_deck_rule_unsuspends_cards_when_deck_becomes_ignored,
+    "test_on_addon_delete_unsuspends_all_non_ignored_new_cards_before_deletion": test_on_addon_delete_unsuspends_all_non_ignored_new_cards_before_deletion,
     "test_deck_browser_submenu_toggles_ignore_and_sets_interval": test_deck_browser_submenu_toggles_ignore_and_sets_interval,
     "test_tag_rule_takes_precedence_over_custom_deck_interval": test_tag_rule_takes_precedence_over_custom_deck_interval,
     "test_ignored_deck_skips_matching_tag_rule": test_ignored_deck_skips_matching_tag_rule,
     "test_on_config_save_unsuspends_addon_cards_for_newly_ignored_deck": test_on_config_save_unsuspends_addon_cards_for_newly_ignored_deck,
+    "test_unsuspend_all_addon_cards_in_deck_unsuspends_non_ignored_new_cards_only": test_unsuspend_all_addon_cards_in_deck_unsuspends_non_ignored_new_cards_only,
     "test_needs_breaking_change_recovery_uses_the_version_floor": test_needs_breaking_change_recovery_uses_the_version_floor,
     "test_browser_render_performs_recovery_when_version_is_missing": test_browser_render_performs_recovery_when_version_is_missing,
-    "test_browser_render_migrates_legacy_suspension_tags": test_browser_render_migrates_legacy_suspension_tags,
+    "test_browser_render_reprocesses_legacy_suspension_tags_before_scan": test_browser_render_reprocesses_legacy_suspension_tags_before_scan,
     "test_collection_did_load_skips_recovery_when_future_version_is_stored": test_collection_did_load_skips_recovery_when_future_version_is_stored,
+    "test_suspended_immature_review_card_does_not_block_new_siblings": test_suspended_immature_review_card_does_not_block_new_siblings,
 }
 
 

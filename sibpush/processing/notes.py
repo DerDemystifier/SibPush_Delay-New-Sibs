@@ -27,7 +27,11 @@ from .query import (
     get_modified_note_ids_since,
     should_run_unmanaged_notes,
 )
-from .suspension import card_is_ignored, note_is_ignored_deck, suspend_cards
+from .suspension import (
+    card_is_ignored,
+    note_is_ignored_deck,
+    suspend_cards,
+)
 
 MODIFIED_NOTE_BATCH_SIZE = 1000
 MODIFIED_NOTE_BATCH_PAUSE_MS = 100

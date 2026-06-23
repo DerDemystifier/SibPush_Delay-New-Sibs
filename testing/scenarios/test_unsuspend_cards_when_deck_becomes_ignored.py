@@ -2,15 +2,13 @@ from __future__ import annotations
 
 import json
 from importlib import import_module
+from unittest.mock import patch
 
-from anki.consts import QUEUE_TYPE_REV, QUEUE_TYPE_SUSPENDED
+from anki.consts import QUEUE_TYPE_NEW, QUEUE_TYPE_REV, QUEUE_TYPE_SUSPENDED
 
 from ..addon_utils import patched_addon_state
-from ..card_utils import (
-    assert_card_is_not_ignored,
-    assert_card_queues,
-    set_review_card_state,
-)
+from ..card_utils import card_custom_data, assert_card_is_not_ignored, assert_card_queues, set_review_card_state
+from ..card_utils import assert_card_is_ignored, set_card_custom_data
 from ..collection_utils import temporary_collection
 from ..note_utils import add_note_with_siblings, build_test_notetype, make_test_deck_id
 from ..print_utils import print_collection_state
@@ -100,5 +98,62 @@ def test_on_config_save_unsuspends_addon_cards_for_newly_ignored_deck() -> None:
         assert_card_is_not_ignored(col, cards[2])
 
 
+def test_unsuspend_all_addon_cards_in_deck_unsuspends_non_ignored_new_cards_only() -> None:
+    """Deck restore should unsuspend every non-ignored suspended new card in that deck."""
+
+    with temporary_collection() as col:
+        model = build_test_notetype(col)
+        deck_id = make_test_deck_id(col)
+
+        note, cards = add_note_with_siblings(col, model, deck_id, "Deck restore note")
+        set_review_card_state(col, cards[0], ivl=10)
+
+        with patched_addon_state(col) as patched_addon:
+            addon = patched_addon
+            state_module = import_module(f"{addon.__name__}.sibpush.state")
+            suspension_module = import_module(f"{addon.__name__}.sibpush.processing.suspension")
+
+            patched_addon.process_all_notes(col)
+
+            manual_note, manual_cards = add_note_with_siblings(
+                col, model, deck_id, "Manual deck suspension note"
+            )
+            col.sched.suspend_cards([manual_cards[1].id])
+
+            ignored_note, ignored_cards = add_note_with_siblings(
+                col, model, deck_id, "Ignored deck suspension note"
+            )
+
+            review_note, review_cards = add_note_with_siblings(
+                col, model, deck_id, "Manual review deck suspension note"
+            )
+            set_review_card_state(col, review_cards[0], ivl=10)
+
+            set_card_custom_data(
+                col,
+                ignored_cards[2],
+                {state_module.ADDON_CUSTOM_DATA_KEY: state_module.ADDON_CUSTOM_DATA_IGNORED_VALUE},
+            )
+            col.sched.suspend_cards([ignored_cards[2].id])
+
+            assert card_custom_data(col, cards[1]).get(state_module.ADDON_CUSTOM_DATA_KEY) is None
+            assert card_custom_data(col, cards[2]).get(state_module.ADDON_CUSTOM_DATA_KEY) is None
+            assert card_custom_data(col, manual_cards[1]).get(state_module.ADDON_CUSTOM_DATA_KEY) is None
+
+            with patch.object(suspension_module, "tooltip"):
+                suspension_module.unsuspend_all_addon_cards_in_deck(col, str(deck_id))
+
+        assert_card_queues(col, cards, [QUEUE_TYPE_REV, QUEUE_TYPE_NEW, QUEUE_TYPE_NEW])
+        assert_card_queues(col, manual_cards, [QUEUE_TYPE_NEW, QUEUE_TYPE_NEW, QUEUE_TYPE_NEW])
+        assert_card_queues(col, ignored_cards, [QUEUE_TYPE_NEW, QUEUE_TYPE_NEW, QUEUE_TYPE_SUSPENDED])
+        assert_card_queues(col, review_cards, [QUEUE_TYPE_REV, QUEUE_TYPE_NEW, QUEUE_TYPE_NEW])
+        assert_card_is_not_ignored(col, manual_cards[1])
+        assert_card_is_ignored(col, ignored_cards[2])
+        assert card_custom_data(col, manual_cards[1]).get(state_module.ADDON_CUSTOM_DATA_KEY) is None
+        assert card_custom_data(col, ignored_cards[2]).get(state_module.ADDON_CUSTOM_DATA_KEY) == state_module.ADDON_CUSTOM_DATA_IGNORED_VALUE
+        assert card_custom_data(col, review_cards[0]).get(state_module.ADDON_CUSTOM_DATA_KEY) is None
+
+
 if __name__ == "__main__":
     test_on_config_save_unsuspends_addon_cards_for_newly_ignored_deck()
+    test_unsuspend_all_addon_cards_in_deck_unsuspends_non_ignored_new_cards_only()
