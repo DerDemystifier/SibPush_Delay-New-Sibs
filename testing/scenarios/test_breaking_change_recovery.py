@@ -5,7 +5,7 @@ from importlib import import_module
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from anki.consts import QUEUE_TYPE_SUSPENDED
+from anki.consts import QUEUE_TYPE_NEW, QUEUE_TYPE_SUSPENDED
 
 from ..addon_utils import FakeAddonManager, patched_addon_state
 from ..card_utils import card_custom_data, card_queue
@@ -144,8 +144,8 @@ def test_browser_render_performs_recovery_when_version_is_missing() -> None:
             }
 
 
-def test_browser_render_migrates_legacy_suspension_tags() -> None:
-    """Legacy tag cleanup should finish before browser scan processing starts."""
+def test_browser_render_reprocesses_legacy_suspension_tags_before_scan() -> None:
+    """Legacy tag cleanup should finish before the browser scan reprocesses the collection."""
 
     with temporary_collection() as col:
         fake_manager = FakeAddonManager(
@@ -184,14 +184,19 @@ def test_browser_render_migrates_legacy_suspension_tags() -> None:
             note, cards = add_note_with_siblings(
                 col, model, deck_id, "Legacy tag recovery test", expected_card_count=2
             )
+            manual_note, manual_cards = add_note_with_siblings(
+                col, model, deck_id, "Manual suspension should survive recovery", expected_card_count=2
+            )
 
             note.add_tag(migration_module.LEGACY_SUSPENDED_TAG)
             col.update_note(note)
             col.sched.suspend_cards([card.id for card in cards])
+            col.sched.suspend_cards([manual_cards[1].id])
 
             assert note.has_tag(migration_module.LEGACY_SUSPENDED_TAG)
             assert card_queue(col, cards[0].id) == QUEUE_TYPE_SUSPENDED
             assert card_queue(col, cards[1].id) == QUEUE_TYPE_SUSPENDED
+            assert card_queue(col, manual_cards[1].id) == QUEUE_TYPE_SUSPENDED
 
             state_file.write_text(json.dumps({"addon_version": "1.0.0"}), encoding="utf-8")
 
@@ -210,8 +215,12 @@ def test_browser_render_migrates_legacy_suspension_tags() -> None:
                 on_success: object | None = None,
             ) -> None:
                 assert not col.get_note(note.id).has_tag(migration_module.LEGACY_SUSPENDED_TAG)
-                assert card_queue(col, cards[0].id) != QUEUE_TYPE_SUSPENDED
-                assert card_queue(col, cards[1].id) != QUEUE_TYPE_SUSPENDED
+                assert card_queue(col, cards[0].id) == QUEUE_TYPE_NEW
+                assert card_queue(col, cards[1].id) == QUEUE_TYPE_SUSPENDED
+                assert card_queue(col, manual_cards[1].id) == QUEUE_TYPE_SUSPENDED
+                assert state_module.ADDON_CUSTOM_DATA_KEY not in card_custom_data(col, cards[0])
+                assert state_module.ADDON_CUSTOM_DATA_KEY not in card_custom_data(col, cards[1])
+                assert state_module.ADDON_CUSTOM_DATA_KEY not in card_custom_data(col, manual_cards[1])
                 if callable(on_success):
                     on_success()
                 if callable(on_complete):
@@ -224,9 +233,13 @@ def test_browser_render_migrates_legacy_suspension_tags() -> None:
 
             assert "callback" in scheduled
             assert not col.get_note(note.id).has_tag(migration_module.LEGACY_SUSPENDED_TAG)
-            assert card_queue(col, cards[0].id) != QUEUE_TYPE_SUSPENDED
-            assert card_queue(col, cards[1].id) != QUEUE_TYPE_SUSPENDED
+            assert card_queue(col, cards[0].id) == QUEUE_TYPE_NEW
+            assert card_queue(col, cards[1].id) == QUEUE_TYPE_SUSPENDED
+            assert card_queue(col, manual_cards[1].id) == QUEUE_TYPE_SUSPENDED
             assert state_module.installed_version == state_module.ADDON_VERSION
+            assert state_module.ADDON_CUSTOM_DATA_KEY not in card_custom_data(col, cards[0])
+            assert state_module.ADDON_CUSTOM_DATA_KEY not in card_custom_data(col, cards[1])
+            assert state_module.ADDON_CUSTOM_DATA_KEY not in card_custom_data(col, manual_cards[1])
             assert json.loads(state_file.read_text(encoding="utf-8")) == {
                 "addon_version": state_module.ADDON_VERSION,
             }
@@ -290,5 +303,5 @@ def test_collection_did_load_skips_recovery_when_future_version_is_stored() -> N
 if __name__ == "__main__":
     test_needs_breaking_change_recovery_uses_the_version_floor()
     test_browser_render_performs_recovery_when_version_is_missing()
-    test_browser_render_migrates_legacy_suspension_tags()
+    test_browser_render_reprocesses_legacy_suspension_tags_before_scan()
     test_collection_did_load_skips_recovery_when_future_version_is_stored()

@@ -80,10 +80,7 @@ def test_card_browser_ignore_toggle_round_trip() -> None:
         model = build_test_notetype(col)
         deck_id = make_test_deck_id(col)
         _, cards = add_note_with_siblings(col, model, deck_id, "Browser ignore toggle note")
-
-        # Add some third-party custom data so we can confirm the merge behavior preserves it.
-        for index, card in enumerate(cards, start=1):
-            set_card_custom_data(col, card, {"third_party": f"card-{index}"})
+        third_party_key = "tp"
 
         set_review_card_state(col, cards[0], ivl=10)
 
@@ -91,6 +88,11 @@ def test_card_browser_ignore_toggle_round_trip() -> None:
             patched_addon.process_all_notes(col)
             browser_actions = import_module(f"{patched_addon.__name__}.sibpush.ui.browser_actions")
             state_module = import_module(f"{patched_addon.__name__}.sibpush.state")
+
+            # Add some third-party custom data after SibPush has done its own bookkeeping so we
+            # can verify the browser toggle preserves unrelated keys.
+            for index, card in enumerate(cards, start=1):
+                set_card_custom_data(col, card, {third_party_key: f"card-{index}"})
 
             browser = _FakeBrowser([card.id for card in cards])
             menu = _FakeMenu("root")
@@ -108,7 +110,7 @@ def test_card_browser_ignore_toggle_round_trip() -> None:
             assert_card_queues(col, cards, [QUEUE_TYPE_REV, QUEUE_TYPE_NEW, QUEUE_TYPE_NEW])
             for card in cards:
                 assert_card_is_ignored(col, card)
-                assert card_custom_data(col, card)["third_party"] == f"card-{cards.index(card) + 1}"
+                assert card_custom_data(col, card)[third_party_key] == f"card-{cards.index(card) + 1}"
                 assert card_custom_data(col, card)[state_module.ADDON_CUSTOM_DATA_KEY] == state_module.ADDON_CUSTOM_DATA_IGNORED_VALUE
 
             refreshed_menu = _FakeMenu("root")
@@ -122,7 +124,7 @@ def test_card_browser_ignore_toggle_round_trip() -> None:
             assert_card_queues(col, cards, [QUEUE_TYPE_REV, QUEUE_TYPE_NEW, QUEUE_TYPE_NEW])
             for card in cards:
                 assert_card_is_not_ignored(col, card)
-                assert card_custom_data(col, card)["third_party"] == f"card-{cards.index(card) + 1}"
+                assert card_custom_data(col, card)[third_party_key] == f"card-{cards.index(card) + 1}"
                 assert state_module.ADDON_CUSTOM_DATA_KEY not in card_custom_data(col, card)
 
 
