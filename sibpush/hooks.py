@@ -30,6 +30,7 @@ from anki.cards import Card
 from anki.collection import Collection
 from aqt import gui_hooks
 from aqt.qt import QTimer
+from aqt.utils import askUser
 
 from .config.migration import migrate_legacy_config
 from .config.parser import load_config_state, on_config_display, on_config_save
@@ -54,6 +55,8 @@ from .state import (
 )
 from .processing.suspension import unsuspend_all_addon_cards_in_deck
 from .processing.suspension import unsuspend_all_addon_cards
+from .processing.suspension import clear_all_addon_ignored_markers
+from .state import ADDON_CUSTOM_DATA_KEY, ADDON_CUSTOM_DATA_IGNORED_VALUE
 from .ui.browser_actions import add_browser_card_actions
 from .ui.deck_actions import add_deck_actions_to_options_menu
 
@@ -293,7 +296,20 @@ def on_addon_delete(dialog: Any, ids: list[str]) -> None:
     if _addon_module_name() in ids:
         current_mw = get_mw()
         if current_mw is not None and getattr(current_mw, "col", None):
-            unsuspend_all_addon_cards(current_mw.col)
+            col = current_mw.col
+            ignored_query = f"prop:cds:{ADDON_CUSTOM_DATA_KEY}={ADDON_CUSTOM_DATA_IGNORED_VALUE}"
+            ignored_count = len(col.find_cards(ignored_query))
+            if ignored_count > 0:
+                confirmed = askUser(
+                    f"{ignored_count} card(s) in your collection have been marked as ignored by SibPush. "
+                    f"Do you want to clear this marker now?\n\n"
+                    f"If you clear it, reinstalling SibPush later will not remember which cards were ignored.",
+                    parent=current_mw,
+                    defaultno=True,
+                )
+                if confirmed:
+                    clear_all_addon_ignored_markers(col)
+            unsuspend_all_addon_cards(col)
 
     logging.shutdown()
 
