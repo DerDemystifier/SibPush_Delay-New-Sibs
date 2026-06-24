@@ -8,6 +8,8 @@ from collections.abc import Sequence
 from typing import Any, Callable, cast
 
 from anki.cards import Card, CardId
+
+from ..cards.snapshots import CardSnapshot
 from anki.collection import Collection
 from anki.consts import QUEUE_TYPE_SUSPENDED
 from anki.notes import NoteId
@@ -74,7 +76,7 @@ def _clear_addon_ignored_marker(col: Collection, card: Card) -> bool:
     return True
 
 
-def card_is_ignored(card: Card) -> bool:
+def card_is_ignored(card: Card | CardSnapshot) -> bool:
     """Return whether a card is marked as ignored by SibPush."""
 
     return _load_custom_data(card).get(ADDON_CUSTOM_DATA_KEY) == ADDON_CUSTOM_DATA_IGNORED_VALUE
