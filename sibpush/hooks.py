@@ -283,17 +283,31 @@ def collection_did_temporarily_close(col: Collection) -> None:
 
 
 def on_addon_delete(dialog: Any, ids: list[str]) -> None:
-    """Restore add-on-managed cards before the add-on is deleted.
+    """Restore add-on-managed cards and deregister all hooks before the add-on is deleted.
 
     Args:
         dialog (Any): The add-ons dialog instance.
         ids (list[str]): The ids selected for deletion.
 
     Returns:
-        None: The add-on's cards are restored immediately before logging shuts down.
+        None: The add-on's cards are restored and hooks torn down immediately.
     """
 
     if _addon_module_name() in ids:
+        hooks = cast(Any, gui_hooks)
+
+        # Deregister every hook so nothing fires after deletion for the rest of this session.
+        hooks.collection_did_load.remove(collection_did_load)
+        hooks.deck_browser_did_render.remove(browser_render)
+        hooks.reviewer_did_answer_card.remove(reviewer_did_answer_card)
+        hooks.sync_did_finish.remove(sync_did_finish)
+        hooks.collection_did_temporarily_close.remove(collection_did_temporarily_close)
+        hooks.deck_browser_will_show_options_menu.remove(add_deck_actions_to_options_menu)
+        hooks.browser_will_show_context_menu.remove(add_browser_card_actions)
+        hooks.addon_config_editor_will_display_json.remove(addon_config_editor_will_display_json)
+        hooks.addon_config_editor_will_update_json.remove(on_config_save)
+        # Leave addons_dialog_will_delete_addons — we're currently inside it.
+
         current_mw = get_mw()
         if current_mw is not None and getattr(current_mw, "col", None):
             col = current_mw.col
