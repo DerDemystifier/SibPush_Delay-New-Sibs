@@ -17,6 +17,7 @@ from anki.cards import (
 )
 
 from .snapshots import CardSnapshot, capture_snapshots
+from ..processing.suspension import card_is_ignored
 
 if TYPE_CHECKING:
     from anki.collection import Collection
@@ -133,7 +134,11 @@ def _format_snapshot_line(
     status = _status_label(snapshot.queue, snapshot.type)
     interval = _interval_label(snapshot.queue, snapshot.type, snapshot.ivl)
     suffix = f" (was {previous_status})" if previous_status and previous_status != status else ""
-    return f"{indent}--- Card {snapshot.id} | Due: {snapshot.due} | Interval: {interval} [{status}]{suffix}"
+    ignored_suffix = " [IGNORED]" if card_is_ignored(snapshot) else ""
+    return (
+        f"{indent}--- Card {snapshot.id} | Due: {snapshot.due} | "
+        f"Interval: {interval} [{status}]{suffix}{ignored_suffix}"
+    )
 
 
 def _format_note_header(note: Any, col: Collection, note_id: int) -> list[str]:
