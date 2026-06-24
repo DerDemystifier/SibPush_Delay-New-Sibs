@@ -99,6 +99,21 @@ def clear_card_ignored(col: Collection, card: Card) -> None:
     _clear_addon_ignored_marker(col, card)
 
 
+def clear_all_addon_ignored_markers(col: Collection) -> None:
+    """Remove the ignored marker from every card in the collection that carries it.
+
+    Operates collection-wide with no deck or card-type restriction.  Suspend state
+    is intentionally left untouched — any follow-on unsuspend logic is the caller's
+    responsibility.
+    """
+
+    query = f"prop:cds:{ADDON_CUSTOM_DATA_KEY}={ADDON_CUSTOM_DATA_IGNORED_VALUE}"
+    card_ids = col.find_cards(query)
+    for card_id in card_ids:
+        card = col.get_card(card_id)
+        _clear_addon_ignored_marker(col, card)
+
+
 def suspend_cards(col: Collection, cards_to_suspend: Sequence[Card], note_id: NoteId) -> None:
     """Suspend a group of cards.
 
