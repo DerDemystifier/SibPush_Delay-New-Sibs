@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from importlib import import_module
 
-from anki.consts import QUEUE_TYPE_NEW, QUEUE_TYPE_REV
+from anki.consts import QUEUE_TYPE_REV, QUEUE_TYPE_SUSPENDED
 
 from ..addon_utils import patched_addon_state
 from ..card_utils import (
@@ -107,7 +107,7 @@ def test_card_browser_ignore_toggle_round_trip() -> None:
             ignore_action.triggered.callbacks[0]()
 
             assert browser.model.reset_calls == 1
-            assert_card_queues(col, cards, [QUEUE_TYPE_REV, QUEUE_TYPE_NEW, QUEUE_TYPE_NEW])
+            assert_card_queues(col, cards, [QUEUE_TYPE_REV, QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_SUSPENDED])
             for card in cards:
                 assert_card_is_ignored(col, card)
                 assert card_custom_data(col, card)[third_party_key] == f"card-{cards.index(card) + 1}"
@@ -121,11 +121,54 @@ def test_card_browser_ignore_toggle_round_trip() -> None:
             refreshed_action.triggered.callbacks[0]()
 
             assert browser.model.reset_calls == 2
-            assert_card_queues(col, cards, [QUEUE_TYPE_REV, QUEUE_TYPE_NEW, QUEUE_TYPE_NEW])
+            assert_card_queues(col, cards, [QUEUE_TYPE_REV, QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_SUSPENDED])
             for card in cards:
                 assert_card_is_not_ignored(col, card)
                 assert card_custom_data(col, card)[third_party_key] == f"card-{cards.index(card) + 1}"
                 assert state_module.ADDON_CUSTOM_DATA_KEY not in card_custom_data(col, card)
+
+
+def test_card_browser_ignore_toggle_preserves_manual_suspension() -> None:
+    """Ignoring any suspended card should not change its suspension state."""
+
+    with temporary_collection() as col:
+        model = build_test_notetype(col)
+        deck_id = make_test_deck_id(col)
+        _, review_cards = add_note_with_siblings(col, model, deck_id, "Suspended review note")
+        set_review_card_state(col, review_cards[0], ivl=10)
+        col.sched.suspend_cards([review_cards[0].id])
+
+        _, new_sibling_cards = add_note_with_siblings(
+            col, model, deck_id, "Suspended new sibling note"
+        )
+        col.sched.suspend_cards([new_sibling_cards[0].id])
+
+        single_card_model = build_test_notetype(col, card_count=1)
+        _, single_cards = add_note_with_siblings(
+            col,
+            single_card_model,
+            deck_id,
+            "Suspended standalone note",
+            expected_card_count=1,
+        )
+        col.sched.suspend_cards([single_cards[0].id])
+
+        with patched_addon_state(col) as patched_addon:
+            browser_actions = import_module(f"{patched_addon.__name__}.sibpush.ui.browser_actions")
+
+            for card in (review_cards[0], new_sibling_cards[0], single_cards[0]):
+                browser = _FakeBrowser([card.id])
+                menu = _FakeMenu("root")
+                browser_actions.add_browser_card_actions(browser, menu)
+
+                ignore_action = menu.submenus[0].actions[0]
+                assert ignore_action.text == "Ignore card"
+                assert ignore_action.checked is False
+
+                ignore_action.triggered.callbacks[0]()
+
+                assert_card_queues(col, [card], [QUEUE_TYPE_SUSPENDED])
+                assert_card_is_ignored(col, card)
 
 
 if __name__ == "__main__":
