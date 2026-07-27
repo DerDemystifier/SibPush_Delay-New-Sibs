@@ -38,6 +38,10 @@
     -   `ignored: false` keeps that deck active under `default_interval`.
     -   `interval` is the maturity threshold for that specific deck.
 
+    Ignoring a deck also restores only currently suspended new sibling cards that SibPush marked
+    as suspended. User-suspended cards, review cards, standalone cards, and individually ignored
+    cards are not restored.
+
 ## `tag_rules`
 
 -   **Type**: Dictionary of tag names to rule objects
@@ -66,3 +70,15 @@
     -   `true`: Logging is enabled. You can view the logs by accessing the `log.txt` file via the 'View files' option of the addon.
     -   `false`: Logging is disabled.
 -   **Example**: `"debug": false`
+
+## Card ignore and suspension provenance
+
+**SibPush → Ignore card** is a metadata-only opt-out. The selected card keeps its current queue,
+including a suspension, and any SibPush suspension provenance is retained. Clearing the card
+ignore marker does not automatically unsuspend it.
+
+Manual unsuspension does not erase SibPush's suspension provenance. If SibPush later suspends the
+card again, explicit deck-ignore or add-on deletion cleanup may restore it because the marker is
+still authoritative. Cards store the suspension-provenance marker as `sibpsusp` and the
+individual-card ignore marker as `sibpign`. These are the exact custom-data keys written by
+SibPush.

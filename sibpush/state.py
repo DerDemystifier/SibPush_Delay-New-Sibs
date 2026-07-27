@@ -29,8 +29,9 @@ last_sync_mod_ts: int | None = None
 # These keys live inside ``sibpush_state.json``; changing them is a schema change.
 #
 # PENDING_UNSUSPEND_DECK_IDS_KEY:
-#   List of deck IDs (as strings) queued for unsuspend cleanup. When a deck is un-ignored,
-#   any cards previously suspended by the add-on are unsuspended before the next scan.
+#   List of deck IDs (as strings) queued for marker-aware unsuspend cleanup. When a deck is
+#   ignored, currently suspended cards previously suspended by the add-on are restored before
+#   the next scan.
 #   This queue ensures that unsuspend operations are performed in the correct browser context.
 PENDING_UNSUSPEND_DECK_IDS_KEY = "pending_unsuspend_deck_ids"
 # PENDING_PROCESSING_RESET_KEY:
@@ -68,11 +69,25 @@ def _default_pending_browser_work() -> dict[str, Any]:
 
 _pending_browser_work = _default_pending_browser_work()
 
-ADDON_CUSTOM_DATA_KEY = "sibpush"
-ADDON_CUSTOM_DATA_IGNORED_VALUE = "ignored"
-CONFIG_IGNORED_KEY = ADDON_CUSTOM_DATA_IGNORED_VALUE
-ADDON_VERSION = "2.0.0"  # Update this when releasing a new version
-BREAKING_CHANGE_VERSION = "2.0.0"  # Set this equal ADDON_VERSION if the release includes breaking changes that require the recovery flow to run.
+# Card custom-data keys must be alphanumeric and no longer than 8 bytes in this Anki build.
+# Keep the two independent marker keys centralized so callers and tests use the exact persisted
+# names without duplicating storage details.
+SIBPUSH_SUSPENDED_KEY = "sibpsusp"
+SIBPUSH_IGNORED_KEY = "sibpign"
+SIBPUSH_MARKER_VALUE = True
+
+# The old representation is read only by migration and defensive compatibility paths. It must
+# not be used for new writes because it cannot represent independent marker state.
+LEGACY_ADDON_CUSTOM_DATA_KEY = "sibpush"
+LEGACY_ADDON_CUSTOM_DATA_IGNORED_VALUE = "ignored"
+
+# Compatibility names retained for existing integrations. They now describe the new ignored
+# marker storage, not the legacy overloaded field.
+ADDON_CUSTOM_DATA_KEY = SIBPUSH_IGNORED_KEY
+ADDON_CUSTOM_DATA_IGNORED_VALUE = SIBPUSH_MARKER_VALUE
+CONFIG_IGNORED_KEY = "ignored"
+ADDON_VERSION = "2.2.0"  # Update this when releasing a new version
+BREAKING_CHANGE_VERSION = "2.1.0"  # This release changes persisted card custom-data semantics.
 VERSION_KEY = "addon_version"
 STATE_FILENAME = "sibpush_state.json"
 CONFIG_FILENAME = "sibpush_config.json"
@@ -229,7 +244,7 @@ def _normalize_pending_browser_work(value: Any) -> dict[str, Any]:
         return _default_pending_browser_work()
 
     typed_value = cast(dict[str, object], value)
-    normalized_work = {
+    normalized_work: dict[str, Any] = {
         PENDING_UNSUSPEND_DECK_IDS_KEY: _normalize_deck_id_sequence(
             typed_value.get(PENDING_UNSUSPEND_DECK_IDS_KEY, [])
         ),

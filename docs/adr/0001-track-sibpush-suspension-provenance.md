@@ -36,39 +36,43 @@ markers:
 
 ```json
 {
-    "sibpush_suspended": true,
-    "sibpush_ignored": true
+  "sibpsusp": true,
+  "sibpign": true
 }
 ```
 
+These are the exact marker keys written by SibPush. They are alphanumeric and no longer than
+8 bytes because this Anki build's custom-data backend rejects longer keys and its `prop:cds:`
+search parser does not reliably accept underscores in marker keys.
+
 The markers have distinct meanings:
 
-- `sibpush_suspended: true` means SibPush caused the card to be suspended and
+- `sibpsusp: true` means SibPush caused the card to be suspended and
   has not explicitly undone that suspension. It is a provenance/restoration
   marker, not a claim that the card is currently suspended.
-- `sibpush_ignored: true` means SibPush must leave the card alone during normal
+- `sibpign: true` means SibPush must leave the card alone during normal
   processing. This marker is the renamed replacement for the current
   `{"sibpush": "ignored"}` representation.
 
 The markers are independent. A card may contain both markers. In that case,
-`sibpush_ignored` takes precedence for normal processing, while
-`sibpush_suspended` preserves the information needed for explicit cleanup.
+`sibpign` takes precedence for normal processing, while
+`sibpsusp` preserves the information needed for explicit cleanup.
 
 ### Marker lifecycle
 
 1. When SibPush actually changes an eligible card from active to suspended, it
-   writes `sibpush_suspended: true`.
+  writes `sibpsusp: true`.
 2. If a card was already suspended before SibPush tried to process it, SibPush
    does not write the marker.
-3. If a user manually unsuspends a card carrying `sibpush_suspended`, SibPush
+3. If a user manually unsuspends a card carrying `sibpsusp`, SibPush
    deliberately leaves the marker in place. The marker records how the card
    entered the suspended state, not its current queue. If normal processing
    would suspend that card again, SibPush may do so. The user's explicit way to
-   opt that card out is `sibpush_ignored: true`.
+  opt that card out is `sibpign: true`.
 4. When SibPush itself unsuspends/restores a card, it removes
-   `sibpush_suspended`.
+  `sibpsusp`.
 5. When a deck becomes ignored, cleanup restores only currently suspended,
-   eligible new sibling cards carrying `sibpush_suspended`. It then removes the
+  eligible new sibling cards carrying `sibpsusp`. It then removes the
    marker from cards it restored. Cards without the marker, review cards,
    standalone cards, and individually ignored cards remain untouched.
 6. Addon deletion uses the same marker-aware restoration rule rather than
@@ -79,10 +83,9 @@ The markers are independent. A card may contain both markers. In that case,
 ### Storage-key constraint
 
 The names above are the domain-level names for the markers. This Anki build
-limits custom-data keys to 8 bytes, so the implementation must use compact,
-centrally defined storage aliases if the literal names exceed that limit. The
-aliases must be documented next to the constants and treated as an internal
-encoding detail; tests and behavior should use the semantic meanings above.
+limits custom-data keys to 8 bytes, so the implementation uses recognizable,
+centrally defined marker keys (`sibpsusp` and `sibpign`). Tests and behavior use
+these exact persisted names.
 
 This constraint must not be solved by reverting to one overloaded key/value
 pair. Suspension provenance and user-requested ignoring are separate facts and
@@ -139,13 +142,23 @@ SibPush-suspended and later individually ignored without losing provenance.
 
 ## Implementation notes
 
-- Define the semantic marker names and their compact storage aliases as constants
-  in `sibpush/state.py`.
+- Define the marker keys as constants in `sibpush/state.py` (`sibpsusp` and `sibpign`).
 - Update `suspend_cards()` to mark only cards it actually suspends.
 - Update every SibPush-initiated unsuspend path to remove the suspension marker.
 - Make deck-ignore and addon-delete cleanup filter on the suspension marker,
   while still excluding individually ignored cards from normal cleanup.
 - Migrate the existing ignore representation and preserve unrelated custom data.
+- Run the card-data migration before pending browser cleanup or note scanning. Direct upgrades
+  from 2.0 use the 2.1 migration pack; older upgrades run the existing 2.0 recovery pack, which
+  chains the same card-data migration before reprocessing.
+- Cleanup uses positive marker searches as candidate sets and performs the authoritative
+  suspended/new/sibling/ignored checks in Python because this Anki build's negative custom-data
+  search is not reliable. Each restore batch re-fetches cards immediately before unsuspending and
+  verifies that the card is still in the requested ignored deck. A scheduler exception is treated
+  as ambiguous, including partial batch transitions: provenance markers are preserved rather than
+  inferred from the post-exception queue state. Direct ignored-marker cleanup removes both the
+  migrated `sibpign` representation and the legacy `sibpush: "ignored"` representation while
+  preserving suspension provenance and unrelated custom data.
 - Add regression scenarios for pre-suspended user cards, addon-suspended cards,
   manual unsuspension with marker retention, individual ignore, deck ignore,
   unignore/reprocessing, addon deletion, and custom-data preservation.

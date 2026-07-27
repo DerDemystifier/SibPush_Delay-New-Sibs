@@ -7,8 +7,16 @@ from unittest.mock import patch
 from anki.consts import QUEUE_TYPE_NEW, QUEUE_TYPE_REV, QUEUE_TYPE_SUSPENDED
 
 from ..addon_utils import patched_addon_state
-from ..card_utils import card_custom_data, assert_card_is_not_ignored, assert_card_queues, set_review_card_state
-from ..card_utils import assert_card_is_ignored, set_card_custom_data
+from ..card_utils import (
+    assert_card_is_ignored,
+    assert_card_is_not_ignored,
+    assert_card_is_not_suspended_by_addon,
+    assert_card_is_suspended_by_addon,
+    assert_card_queues,
+    card_custom_data,
+    set_card_custom_data,
+    set_review_card_state,
+)
 from ..collection_utils import temporary_collection
 from ..note_utils import add_note_with_siblings, build_test_notetype, make_test_deck_id
 from ..print_utils import print_collection_state
@@ -52,17 +60,15 @@ def test_on_config_save_unsuspends_addon_cards_for_newly_ignored_deck() -> None:
 
             patched_addon.process_all_notes(col)
 
-            print(
-                "After processing, the add-on has suspended the new siblings without marking them ignored."
-            )
+            print("After processing, the add-on has suspended and marked the new siblings.")
             print_collection_state(col, "After processing (suspended by add-on)")
 
             assert_card_queues(
                 col, cards, [QUEUE_TYPE_REV, QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_SUSPENDED]
             )
             assert_card_is_not_ignored(col, cards[0])
-            assert_card_is_not_ignored(col, cards[1])
-            assert_card_is_not_ignored(col, cards[2])
+            assert_card_is_suspended_by_addon(col, cards[1])
+            assert_card_is_suspended_by_addon(col, cards[2])
 
             ignored_rule = {
                 "did": str(deck_id),
@@ -98,8 +104,8 @@ def test_on_config_save_unsuspends_addon_cards_for_newly_ignored_deck() -> None:
         assert_card_is_not_ignored(col, cards[2])
 
 
-def test_unsuspend_all_addon_cards_in_deck_unsuspends_non_ignored_new_cards_only() -> None:
-    """Deck restore should unsuspend every non-ignored suspended new card in that deck."""
+def test_unsuspend_all_addon_cards_in_deck_restores_only_owned_new_cards() -> None:
+    """Deck restore should unsuspend only currently suspended, marker-owned new cards."""
 
     with temporary_collection() as col:
         model = build_test_notetype(col)
@@ -114,6 +120,14 @@ def test_unsuspend_all_addon_cards_in_deck_unsuspends_non_ignored_new_cards_only
             suspension_module = import_module(f"{addon.__name__}.sibpush.processing.suspension")
 
             patched_addon.process_all_notes(col)
+
+            ignored_rule = {
+                "did": str(deck_id),
+                "name": "Deck restore note",
+                state_module.CONFIG_IGNORED_KEY: True,
+                "interval": 30,
+            }
+            patched_addon.custom_deck_rules_by_did[str(deck_id)] = ignored_rule
 
             manual_note, manual_cards = add_note_with_siblings(
                 col, model, deck_id, "Manual deck suspension note"
@@ -142,25 +156,25 @@ def test_unsuspend_all_addon_cards_in_deck_unsuspends_non_ignored_new_cards_only
             )
             col.sched.suspend_cards([ignored_cards[2].id])
 
-            assert card_custom_data(col, cards[1]).get(state_module.ADDON_CUSTOM_DATA_KEY) is None
-            assert card_custom_data(col, cards[2]).get(state_module.ADDON_CUSTOM_DATA_KEY) is None
-            assert card_custom_data(col, manual_cards[1]).get(state_module.ADDON_CUSTOM_DATA_KEY) is None
+            assert_card_is_suspended_by_addon(col, cards[1])
+            assert_card_is_suspended_by_addon(col, cards[2])
+            assert_card_is_not_suspended_by_addon(col, manual_cards[1])
 
             with patch.object(suspension_module, "tooltip"):
                 suspension_module.unsuspend_all_addon_cards_in_deck(col, str(deck_id))
 
         assert_card_queues(col, cards, [QUEUE_TYPE_REV, QUEUE_TYPE_NEW, QUEUE_TYPE_NEW])
-        assert_card_queues(col, manual_cards, [QUEUE_TYPE_NEW, QUEUE_TYPE_NEW, QUEUE_TYPE_NEW])
+        assert_card_queues(col, manual_cards, [QUEUE_TYPE_NEW, QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_NEW])
         assert_card_queues(col, single_card_cards, [QUEUE_TYPE_SUSPENDED])
         assert_card_queues(col, ignored_cards, [QUEUE_TYPE_NEW, QUEUE_TYPE_NEW, QUEUE_TYPE_SUSPENDED])
         assert_card_queues(col, review_cards, [QUEUE_TYPE_REV, QUEUE_TYPE_NEW, QUEUE_TYPE_NEW])
         assert_card_is_not_ignored(col, manual_cards[1])
         assert_card_is_ignored(col, ignored_cards[2])
-        assert card_custom_data(col, manual_cards[1]).get(state_module.ADDON_CUSTOM_DATA_KEY) is None
-        assert card_custom_data(col, ignored_cards[2]).get(state_module.ADDON_CUSTOM_DATA_KEY) == state_module.ADDON_CUSTOM_DATA_IGNORED_VALUE
+        assert_card_is_not_suspended_by_addon(col, manual_cards[1])
+        assert_card_is_not_suspended_by_addon(col, ignored_cards[2])
         assert card_custom_data(col, review_cards[0]).get(state_module.ADDON_CUSTOM_DATA_KEY) is None
 
 
 if __name__ == "__main__":
     test_on_config_save_unsuspends_addon_cards_for_newly_ignored_deck()
-    test_unsuspend_all_addon_cards_in_deck_unsuspends_non_ignored_new_cards_only()
+    test_unsuspend_all_addon_cards_in_deck_restores_only_owned_new_cards()

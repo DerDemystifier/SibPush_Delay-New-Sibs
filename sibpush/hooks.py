@@ -35,7 +35,7 @@ from aqt.utils import askUser
 from .config.migration import migrate_legacy_config
 from .config.parser import load_config_state, on_config_display, on_config_save
 from .logging_support import initialize_log_file
-from .migration import run_startup_migrations
+from .migration import migrate_legacy_ignore_markers, run_startup_migrations
 from .processing.notes import (
     process_modified_notes,
     process_new_unmanaged_notes,
@@ -53,10 +53,12 @@ from .state import (
     save_persistent_state,
     sync_last_sync_mod_ts,
 )
-from .processing.suspension import unsuspend_all_addon_cards_in_deck
-from .processing.suspension import unsuspend_all_addon_cards
-from .processing.suspension import clear_all_addon_ignored_markers
-from .state import ADDON_CUSTOM_DATA_KEY, ADDON_CUSTOM_DATA_IGNORED_VALUE
+from .processing.suspension import (
+    clear_all_addon_ignored_markers,
+    get_ignored_card_ids,
+    unsuspend_all_addon_cards_in_deck,
+    unsuspend_all_addon_cards,
+)
 from .ui.browser_actions import add_browser_card_actions
 from .ui.deck_actions import add_deck_actions_to_options_menu
 
@@ -179,12 +181,10 @@ def browser_render(browser: Any) -> None:
 
     _pending_browser_scan = True
 
-    pending_browser_work = consume_pending_browser_work()
-
-    # Consume the queue once so we do not replay config or sync work on the next render.
-    # Apply pre-scan work first so the modified-note query sees the latest ignore/reset state.
-    _apply_pending_browser_work_before_scan(col, pending_browser_work)
-    browser_scan_since_ts = get_browser_scan_since_ts()
+    # Keep pending work queued until startup card-data migrations have completed. Cleanup must
+    # never inspect legacy custom data before the migration has had a chance to convert it.
+    pending_browser_work: dict[str, Any] = {}
+    browser_scan_since_ts = 0
 
     def _clear_pending_browser_scan() -> None:
         global _pending_browser_scan
@@ -215,6 +215,12 @@ def browser_render(browser: Any) -> None:
             raise
 
     def _start_browser_scan() -> None:
+        nonlocal pending_browser_work, browser_scan_since_ts
+        pending_browser_work = consume_pending_browser_work()
+        # Consume the queue once so we do not replay config or sync work on the next render.
+        # Apply pre-scan work first so the modified-note query sees the latest ignore/reset state.
+        _apply_pending_browser_work_before_scan(col, pending_browser_work)
+        browser_scan_since_ts = get_browser_scan_since_ts()
         cast(Any, QTimer).singleShot(_BROWSER_SCAN_DELAY_MS, _run_browser_render)
 
     try:
@@ -311,8 +317,12 @@ def on_addon_delete(dialog: Any, ids: list[str]) -> None:
         current_mw = get_mw()
         if current_mw is not None and getattr(current_mw, "col", None):
             col = current_mw.col
-            ignored_query = f"prop:cds:{ADDON_CUSTOM_DATA_KEY}={ADDON_CUSTOM_DATA_IGNORED_VALUE}"
-            ignored_count = len(col.find_cards(ignored_query))
+            # Deletion can happen before any browser render, so migrate the legacy representation
+            # before capturing the exclusion set used by restoration.
+            migrate_legacy_ignore_markers(col)
+            ignored_card_ids = get_ignored_card_ids(col)
+            ignored_count = len(ignored_card_ids)
+            confirmed = False
             if ignored_count > 0:
                 confirmed = askUser(
                     f"{ignored_count} card(s) in your collection have been marked as ignored by SibPush. "
@@ -321,9 +331,11 @@ def on_addon_delete(dialog: Any, ids: list[str]) -> None:
                     parent=current_mw,
                     defaultno=True,
                 )
-                if confirmed:
-                    clear_all_addon_ignored_markers(col)
-            unsuspend_all_addon_cards(col)
+            # Restore first using the captured exclusion set. A card carrying both markers must
+            # not become eligible merely because the user confirmed clearing ignored markers.
+            unsuspend_all_addon_cards(col, excluded_card_ids=ignored_card_ids)
+            if ignored_count > 0 and confirmed:
+                clear_all_addon_ignored_markers(col)
 
     logging.shutdown()
 
