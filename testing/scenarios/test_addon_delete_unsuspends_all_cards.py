@@ -67,6 +67,12 @@ def test_on_addon_delete_unsuspends_all_non_ignored_new_cards_before_deletion() 
             review_note, review_cards = add_note_with_siblings(col, model, state["deck_b_id"], "Manually suspended review note")
             set_review_card_state(col, review_cards[0], ivl=10)
 
+            single_card_model = build_test_notetype(col, card_count=1)
+            single_card_note, single_card_cards = add_note_with_siblings(
+                col, single_card_model, state["deck_a_id"], "Manually suspended single-card note", expected_card_count=1
+            )
+            col.sched.suspend_cards([single_card_cards[0].id])
+
             set_card_custom_data(
                 col,
                 ignored_cards[2],
@@ -86,6 +92,7 @@ def test_on_addon_delete_unsuspends_all_non_ignored_new_cards_before_deletion() 
         assert_card_queues(col, cards_a, [QUEUE_TYPE_REV, QUEUE_TYPE_NEW, QUEUE_TYPE_NEW])
         assert_card_queues(col, cards_b, [QUEUE_TYPE_REV, QUEUE_TYPE_NEW, QUEUE_TYPE_NEW])
         assert_card_queues(col, manual_cards, [QUEUE_TYPE_NEW, QUEUE_TYPE_NEW, QUEUE_TYPE_NEW])
+        assert_card_queues(col, single_card_cards, [QUEUE_TYPE_SUSPENDED])
         assert_card_queues(col, ignored_cards, [QUEUE_TYPE_NEW, QUEUE_TYPE_NEW, QUEUE_TYPE_SUSPENDED])
         assert_card_queues(col, review_cards, [QUEUE_TYPE_REV, QUEUE_TYPE_NEW, QUEUE_TYPE_NEW])
         assert_card_is_not_ignored(col, cards_a[1])
