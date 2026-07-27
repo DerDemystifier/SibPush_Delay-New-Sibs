@@ -31,6 +31,7 @@ from .suspension import (
     card_is_ignored,
     note_is_ignored_deck,
     suspend_cards,
+    unsuspend_cards,
 )
 
 MODIFIED_NOTE_BATCH_SIZE = 1000
@@ -154,7 +155,7 @@ def process_note(
         new_cards_to_suspend: list[Card] = []
 
         if first_card_is_suspended:
-            col.sched.unsuspend_cards([first_new_card.id])
+            unsuspend_cards(col, [first_new_card])
             promoted_card = first_new_card
             changed = True
             action_taken = "Unsuspend the first new card"

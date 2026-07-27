@@ -10,6 +10,8 @@ from ..addon_utils import patched_addon_state
 from ..card_utils import (
     assert_card_is_ignored,
     assert_card_is_not_ignored,
+    assert_card_is_not_suspended_by_addon,
+    assert_card_is_suspended_by_addon,
     assert_card_queues,
     card_custom_data,
     set_card_custom_data,
@@ -41,8 +43,8 @@ def _build_collection_state(col, model):
     }
 
 
-def test_on_addon_delete_unsuspends_all_non_ignored_new_cards_before_deletion() -> None:
-    """Deleting SibPush should restore every suspended new card except ignored ones (legacy behaviour)."""
+def test_on_addon_delete_restores_only_owned_new_cards_before_deletion() -> None:
+    """Deleting SibPush restores only marker-qualified suspended new sibling cards."""
 
     with temporary_collection() as col:
         model = build_test_notetype(col)
@@ -59,6 +61,10 @@ def test_on_addon_delete_unsuspends_all_non_ignored_new_cards_before_deletion() 
 
             assert_card_queues(col, cards_a, [QUEUE_TYPE_REV, QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_SUSPENDED])
             assert_card_queues(col, cards_b, [QUEUE_TYPE_REV, QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_SUSPENDED])
+            assert_card_is_suspended_by_addon(col, cards_a[1])
+            assert_card_is_suspended_by_addon(col, cards_a[2])
+            assert_card_is_suspended_by_addon(col, cards_b[1])
+            assert_card_is_suspended_by_addon(col, cards_b[2])
 
             manual_note, manual_cards = add_note_with_siblings(col, model, state["deck_a_id"], "Manually suspended note")
             col.sched.suspend_cards([manual_cards[1].id])
@@ -82,8 +88,7 @@ def test_on_addon_delete_unsuspends_all_non_ignored_new_cards_before_deletion() 
 
             print_collection_state(col, "Before addon deletion (cards are add-on suspended)")
 
-            # No dialog should appear because we mock askUser — but since there IS one ignored card,
-            # we simulate the user declining (return=False) to get legacy behaviour.
+            # The ignored card is user-suspended and has no SibPush provenance.
             with patch.object(hooks_module, "askUser", return_value=False):
                 hooks_module.on_addon_delete(SimpleNamespace(), [addon.__name__])
 
@@ -91,7 +96,7 @@ def test_on_addon_delete_unsuspends_all_non_ignored_new_cards_before_deletion() 
 
         assert_card_queues(col, cards_a, [QUEUE_TYPE_REV, QUEUE_TYPE_NEW, QUEUE_TYPE_NEW])
         assert_card_queues(col, cards_b, [QUEUE_TYPE_REV, QUEUE_TYPE_NEW, QUEUE_TYPE_NEW])
-        assert_card_queues(col, manual_cards, [QUEUE_TYPE_NEW, QUEUE_TYPE_NEW, QUEUE_TYPE_NEW])
+        assert_card_queues(col, manual_cards, [QUEUE_TYPE_NEW, QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_NEW])
         assert_card_queues(col, single_card_cards, [QUEUE_TYPE_SUSPENDED])
         assert_card_queues(col, ignored_cards, [QUEUE_TYPE_NEW, QUEUE_TYPE_NEW, QUEUE_TYPE_SUSPENDED])
         assert_card_queues(col, review_cards, [QUEUE_TYPE_REV, QUEUE_TYPE_NEW, QUEUE_TYPE_NEW])
@@ -101,13 +106,13 @@ def test_on_addon_delete_unsuspends_all_non_ignored_new_cards_before_deletion() 
         assert_card_is_not_ignored(col, cards_b[2])
         assert_card_is_not_ignored(col, manual_cards[1])
         assert_card_is_ignored(col, ignored_cards[2])
-        assert card_custom_data(col, manual_cards[1]).get(state_module.ADDON_CUSTOM_DATA_KEY) is None
-        assert card_custom_data(col, ignored_cards[2]).get(state_module.ADDON_CUSTOM_DATA_KEY) == state_module.ADDON_CUSTOM_DATA_IGNORED_VALUE
+        assert_card_is_not_suspended_by_addon(col, manual_cards[1])
+        assert_card_is_not_suspended_by_addon(col, ignored_cards[2])
         assert card_custom_data(col, review_cards[0]).get(state_module.ADDON_CUSTOM_DATA_KEY) is None
 
 
-def test_on_addon_delete_clears_ignored_markers_when_user_confirms() -> None:
-    """Confirming the clear dialog removes the ignored marker from every card and unsuspends new ones."""
+def test_on_addon_delete_clears_ignored_markers_without_restoring_them() -> None:
+    """Clearing ignored markers never turns an ignored card into a restorable card."""
 
     with temporary_collection() as col:
         model = build_test_notetype(col)
@@ -155,8 +160,8 @@ def test_on_addon_delete_clears_ignored_markers_when_user_confirms() -> None:
 
         print_collection_state(col, "After addon deletion with confirmed clear")
 
-        # The previously-ignored suspended new card should now be unsuspended
-        assert_card_queues(col, ignored_cards, [QUEUE_TYPE_NEW, QUEUE_TYPE_NEW, QUEUE_TYPE_NEW])
+        # The previously-ignored suspended new card has no SibPush provenance and remains put.
+        assert_card_queues(col, ignored_cards, [QUEUE_TYPE_NEW, QUEUE_TYPE_NEW, QUEUE_TYPE_SUSPENDED])
         assert_card_is_not_ignored(col, ignored_cards[2])
 
         # The non-new ignored card should have its marker cleared but queue/suspend state unchanged

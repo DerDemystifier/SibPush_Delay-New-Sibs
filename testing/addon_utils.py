@@ -80,6 +80,9 @@ class AddonModule(Protocol):
 
     ADDON_CUSTOM_DATA_KEY: str
     ADDON_CUSTOM_DATA_IGNORED_VALUE: str
+    SIBPUSH_IGNORED_KEY: str
+    SIBPUSH_SUSPENDED_KEY: str
+    SIBPUSH_MARKER_VALUE: bool
     CONFIG_IGNORED_KEY: str
 
 
@@ -144,6 +147,9 @@ def load_addon_module() -> Any:
         __package__=module_name,
         ADDON_CUSTOM_DATA_KEY=state_module.ADDON_CUSTOM_DATA_KEY,
         ADDON_CUSTOM_DATA_IGNORED_VALUE=state_module.ADDON_CUSTOM_DATA_IGNORED_VALUE,
+        SIBPUSH_IGNORED_KEY=state_module.SIBPUSH_IGNORED_KEY,
+        SIBPUSH_SUSPENDED_KEY=state_module.SIBPUSH_SUSPENDED_KEY,
+        SIBPUSH_MARKER_VALUE=state_module.SIBPUSH_MARKER_VALUE,
         CONFIG_IGNORED_KEY=state_module.CONFIG_IGNORED_KEY,
     )
 

@@ -24,7 +24,7 @@
 <h2 id="overview"><a class="header-link" href="#overview"></a>Overview</h2>
 <p>Meet SibPush, your Anki addon that likes to keep new sibling cards at a chill distance. It suspends new sibling cards until their older siblings have matured, then brings them back when the deck browser is opened again. No more awkward family reunions in your review sessions!</p>
 <h2 id="purpose"><a class="header-link" href="#purpose"></a>Purpose</h2>
-<p>So here’s the deal. Normally when you bump into a new card, Anki shoves its siblings to the side for just a day. Not cool, right? SibPush steps in to save the &quot;spaced&quot; in spaced repetition. It suspends the new siblings that should wait, marks them with the <code>SibPush_suspended</code> tag, and checks for recovery on the next deck browser render. Once the remaining siblings are mature enough, the suspended cards are unsuspended again. This way, you get to avoid cramming and actually remember stuff long-term. It’s all about keeping the learning groove going at a neat pace.</p>
+<p>So here’s the deal. Normally when you bump into a new card, Anki shoves its siblings to the side for just a day. Not cool, right? SibPush steps in to save the &quot;spaced&quot; in spaced repetition. It suspends the new siblings that should wait, records suspension provenance in the <code>sibpsusp</code> card marker, and checks for recovery on the next deck browser render. Once the remaining siblings are mature enough, the suspended cards are unsuspended again. This way, you get to avoid cramming and actually remember stuff long-term. It’s all about keeping the learning groove going at a neat pace.</p>
 <p>Unlike other similar addons that only act when a note is reviewed in AnkiDesktop, SibPush uses multiple triggers so it can catch up after syncs. That means reviews on AnkiMobile and AnkiWeb still get processed when the desktop collection reloads.</p>
 <h2 id="configuration"><a class="header-link" href="#configuration"></a>Configuration</h2>
 <p>The configuration of SibPush is straightforward and can be tailored to meet your study needs. Here are the settings you can tweak in the config file:</p>
@@ -63,7 +63,7 @@
 </ul>
 <h3 id="notes"><a class="header-link" href="#notes"></a>Notes</h3>
 <ul class="list">
-<li>  When SibPush suspends cards, it adds the <code>SibPush_suspended</code> tag to the note.</li>
+<li>  When SibPush suspends a card, it writes the <code>sibpsusp</code> card marker. Individual-card ignore state uses <code>sibpign</code>.</li>
 <li>  Cards suspended manually by you are ignored and not managed by SibPush.</li>
 </ul>
 <h2 id="usage"><a class="header-link" href="#usage"></a>Usage</h2>

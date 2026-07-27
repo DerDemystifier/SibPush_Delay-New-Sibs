@@ -10,7 +10,7 @@ from anki.collection import Collection
 from anki.notes import Note, NoteId
 
 from ..config.parser import config_settings, custom_deck_rules_by_did, ignored_deck_ids
-from ..state import ADDON_CUSTOM_DATA_KEY, get_last_unmanaged_note_ids
+from ..state import get_last_unmanaged_note_ids
 
 
 def get_tag_rule(note: Note) -> dict[str, Any] | None:
@@ -87,7 +87,10 @@ def get_new_unmanaged_note_ids(col: Collection) -> Sequence[NoteId]:
     """
 
     ignored_query = " ".join(f"-did:{deck_id}" for deck_id in ignored_deck_ids if deck_id)
-    query = f"is:new -has-cd:{ADDON_CUSTOM_DATA_KEY} {ignored_query}".strip()
+    # Do not use a note-level custom-data exclusion here: one ignored sibling must not hide
+    # eligible siblings on the same note. process_note() performs the authoritative card-level
+    # ignored-marker filtering after this candidate query.
+    query = f"is:new {ignored_query}".strip()
     all_new_nids = col.find_notes(query)
 
     if not all_new_nids:
@@ -192,6 +195,12 @@ def get_deck_rule(card: Card) -> dict[str, Any] | None:
     """
 
     return custom_deck_rules_by_did.get(str(card.did))
+
+
+def get_deck_rule_by_id(deck_id: str) -> dict[str, Any] | None:
+    """Look up the current custom deck rule for a stable deck id."""
+
+    return custom_deck_rules_by_did.get(str(deck_id))
 
 
 def get_deck_interval(card: Card) -> int:

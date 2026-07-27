@@ -19,6 +19,9 @@ if TYPE_CHECKING:
 _addon_constants_state = SimpleNamespace(
     ADDON_CUSTOM_DATA_KEY="",
     ADDON_CUSTOM_DATA_IGNORED_VALUE="",
+    SIBPUSH_IGNORED_KEY="",
+    SIBPUSH_SUSPENDED_KEY="",
+    SIBPUSH_MARKER_VALUE=True,
     CONFIG_IGNORED_KEY="",
 )
 
@@ -28,6 +31,9 @@ def set_addon_constants(addon: object) -> None:
     _addon_constants_state.ADDON_CUSTOM_DATA_IGNORED_VALUE = getattr(
         addon, "ADDON_CUSTOM_DATA_IGNORED_VALUE", ""
     )
+    _addon_constants_state.SIBPUSH_IGNORED_KEY = getattr(addon, "SIBPUSH_IGNORED_KEY", "")
+    _addon_constants_state.SIBPUSH_SUSPENDED_KEY = getattr(addon, "SIBPUSH_SUSPENDED_KEY", "")
+    _addon_constants_state.SIBPUSH_MARKER_VALUE = getattr(addon, "SIBPUSH_MARKER_VALUE", True)
     _addon_constants_state.CONFIG_IGNORED_KEY = getattr(addon, "CONFIG_IGNORED_KEY", "")
 
 
@@ -74,24 +80,48 @@ def card_custom_data(col: "Collection", card: "Card") -> dict[str, object]:
 def set_card_ignored(col: "Collection", card: "Card") -> None:
     addon = _addon_constants()
     data = card_custom_data(col, card)
-    data[getattr(addon, "ADDON_CUSTOM_DATA_KEY")] = getattr(
-        addon, "ADDON_CUSTOM_DATA_IGNORED_VALUE"
-    )
+    data[getattr(addon, "SIBPUSH_IGNORED_KEY")] = getattr(addon, "SIBPUSH_MARKER_VALUE")
     set_card_custom_data(col, card, data)
 
 
 def clear_card_ignored(col: "Collection", card: "Card") -> None:
     addon = _addon_constants()
     data = card_custom_data(col, card)
-    if data.pop(getattr(addon, "ADDON_CUSTOM_DATA_KEY"), None) is None:
+    if data.pop(getattr(addon, "SIBPUSH_IGNORED_KEY"), None) is None:
         return
     set_card_custom_data(col, card, data)
 
 
 def card_is_ignored(col: "Collection", card: "Card") -> bool:
     addon = _addon_constants()
-    return card_custom_data(col, card).get(getattr(addon, "ADDON_CUSTOM_DATA_KEY")) == getattr(
-        addon, "ADDON_CUSTOM_DATA_IGNORED_VALUE"
+    return card_custom_data(col, card).get(getattr(addon, "SIBPUSH_IGNORED_KEY")) is getattr(
+        addon, "SIBPUSH_MARKER_VALUE"
+    )
+
+
+def set_card_suspended_by_addon(col: "Collection", card: "Card") -> None:
+    addon = _addon_constants()
+    data = card_custom_data(col, card)
+    data[getattr(addon, "SIBPUSH_SUSPENDED_KEY")] = getattr(addon, "SIBPUSH_MARKER_VALUE")
+    set_card_custom_data(col, card, data)
+
+
+def card_is_suspended_by_addon(col: "Collection", card: "Card") -> bool:
+    addon = _addon_constants()
+    return card_custom_data(col, card).get(getattr(addon, "SIBPUSH_SUSPENDED_KEY")) is getattr(
+        addon, "SIBPUSH_MARKER_VALUE"
+    )
+
+
+def assert_card_is_suspended_by_addon(col: "Collection", card: "Card") -> None:
+    assert card_is_suspended_by_addon(col, card), (
+        f"Card {card.id} should carry SibPush suspension provenance"
+    )
+
+
+def assert_card_is_not_suspended_by_addon(col: "Collection", card: "Card") -> None:
+    assert not card_is_suspended_by_addon(col, card), (
+        f"Card {card.id} should not carry SibPush suspension provenance"
     )
 
 

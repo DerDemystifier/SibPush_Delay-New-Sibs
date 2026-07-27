@@ -9,7 +9,7 @@ import aqt
 from aqt.qt import QInputDialog, QMenu
 
 from ..config.parser import get_custom_deck_rule_snapshot, update_custom_deck_rule
-from ..state import ADDON_CUSTOM_DATA_IGNORED_VALUE, ADDON_CUSTOM_DATA_KEY, CONFIG_IGNORED_KEY, get_mw
+from ..state import CONFIG_IGNORED_KEY, SIBPUSH_IGNORED_KEY, get_mw
 
 
 def _get_collection() -> Any | None:
@@ -139,7 +139,7 @@ def _show_ignored_cards_in_browser(deck_id: int) -> None:
         return
 
     deck_name = _get_deck_name(col, deck_id)
-    query = f'deck:"{deck_name}" prop:cds:{ADDON_CUSTOM_DATA_KEY}={ADDON_CUSTOM_DATA_IGNORED_VALUE}'
+    query = f'deck:"{deck_name}" prop:cds:{SIBPUSH_IGNORED_KEY}=true'
 
     current_mw = get_mw()
     if current_mw is None:

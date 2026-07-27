@@ -33,6 +33,11 @@ The configuration of SibPush is straightforward and can be tailored to meet your
 
     When you ignore a deck, SibPush queues the cleanup work and applies it on the next deck browser render, so the browser remains the single batch-processing doorway.
 
+    Ignoring a deck restores only currently suspended new sibling cards that SibPush previously
+    suspended. Cards suspended by you, review cards, standalone cards, and individually ignored cards
+    are left unchanged. The restoration marker remains authoritative if you manually unsuspend and
+    later re-suspend a card; use **Ignore card** when you want SibPush to stop managing that card.
+
 - `tag_rules`: A dictionary of tag-specific rules. Each key is a note tag name, and each rule uses `interval` to override the maturity threshold for notes with that tag. Tag rules take precedence over deck rules, but ignored decks still win.
 
           Example:
@@ -66,5 +71,15 @@ To exclude a deck from SibPush entirely, open the deck browser, right-click (or 
 ### Ignoring a card
 
 To exclude one or multiple cards from SibPush, open the **Card Browser**, select the card (or multiple cards), right-click, and toggle **SibPush → Ignore card**. The menu item is a checkbox: tick it to ignore, untick it to restore normal management. Ignored cards are excluded from the SibPush processing.
+
+Ignoring an individual card changes only SibPush metadata. It never suspends or unsuspends the
+card, and it preserves any SibPush suspension provenance and unrelated card custom data. If the
+add-on is deleted, the same provenance-aware cleanup is used; individually ignored cards remain
+untouched during restoration, even if their ignored marker is later cleared in the confirmation
+dialog.
+
+For troubleshooting, SibPush stores suspension provenance in the `sibpsusp` card custom-data
+marker and individual-card ignore state in the `sibpign` marker. These are the exact marker keys
+written by the add-on.
 
 Happy studying!
