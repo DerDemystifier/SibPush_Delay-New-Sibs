@@ -149,6 +149,12 @@ def note_is_ignored_deck(card: Card) -> bool:
     return bool(rule and rule.get(CONFIG_IGNORED_KEY))
 
 
+def _card_has_siblings(col: Collection, card: Card) -> bool:
+    """Return whether the card's note contains another card for SibPush to manage."""
+
+    return len(col.card_ids_of_note(card.nid)) > 1
+
+
 def unsuspend_all_addon_cards_in_deck(col: Collection, deck_id: str) -> None:
     """Unsuspend all add-on-managed cards in a specific deck.
 
@@ -165,6 +171,9 @@ def unsuspend_all_addon_cards_in_deck(col: Collection, deck_id: str) -> None:
     for card_id in col.find_cards(f"did:{deck_id} is:new is:suspended"):
         card = col.get_card(card_id)
         if card.queue != QUEUE_TYPE_SUSPENDED:
+            continue
+
+        if not _card_has_siblings(col, card):
             continue
 
         if card_is_ignored(card):
@@ -245,6 +254,9 @@ def unsuspend_all_addon_cards(
     for card_id in col.find_cards("is:new is:suspended"):
         card = col.get_card(card_id)
         if card.queue != QUEUE_TYPE_SUSPENDED:
+            continue
+
+        if not _card_has_siblings(col, card):
             continue
 
         if card_is_ignored(card):
