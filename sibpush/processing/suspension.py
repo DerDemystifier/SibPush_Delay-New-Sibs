@@ -118,9 +118,18 @@ def card_is_suspended_by_addon(card: Card | CardSnapshot) -> bool:
 
 
 def set_card_ignored(col: Collection, card: Card) -> None:
-    """Mark a card as ignored while preserving its current suspension state."""
+    """Mark a card as ignored.
+
+    Cards SibPush suspended (carrying the suspend-provenance marker) are unsuspended and
+    have that marker cleared, since ignoring the card relinquishes SibPush's management of
+    it. Cards suspended by the user (no provenance marker) are left suspended untouched.
+    """
 
     _mutate_marker(col, card, SIBPUSH_IGNORED_KEY, True)
+
+    fresh_card = col.get_card(card.id)
+    if fresh_card.queue == QUEUE_TYPE_SUSPENDED and card_is_suspended_by_addon(fresh_card):
+        unsuspend_cards(col, [fresh_card])
 
 
 def clear_card_ignored(col: Collection, card: Card) -> None:
