@@ -17,6 +17,9 @@ from testing.scenarios.test_addon_delete_unsuspends_all_cards import (
 from testing.scenarios.test_deck_browser_menu_actions import (
     test_deck_browser_submenu_toggles_ignore_and_sets_interval,
 )
+from testing.scenarios.test_card_browser_menu_actions import (
+    test_card_browser_ignore_toggle_preserves_manual_suspension,
+)
 from testing.scenarios.test_ignore_custom_deck_rule_by_deck_id import (
     test_ignores_custom_deck_rule_by_deck_id,
 )
@@ -115,6 +118,7 @@ tests = {
     "test_update_custom_deck_rule_unsuspends_cards_when_deck_becomes_ignored": test_update_custom_deck_rule_unsuspends_cards_when_deck_becomes_ignored,
     "test_on_addon_delete_unsuspends_all_non_ignored_new_cards_before_deletion": test_on_addon_delete_unsuspends_all_non_ignored_new_cards_before_deletion,
     "test_deck_browser_submenu_toggles_ignore_and_sets_interval": test_deck_browser_submenu_toggles_ignore_and_sets_interval,
+    "test_card_browser_ignore_toggle_preserves_manual_suspension": test_card_browser_ignore_toggle_preserves_manual_suspension,
     "test_tag_rule_takes_precedence_over_custom_deck_interval": test_tag_rule_takes_precedence_over_custom_deck_interval,
     "test_ignored_deck_skips_matching_tag_rule": test_ignored_deck_skips_matching_tag_rule,
     "test_on_config_save_unsuspends_addon_cards_for_newly_ignored_deck": test_on_config_save_unsuspends_addon_cards_for_newly_ignored_deck,

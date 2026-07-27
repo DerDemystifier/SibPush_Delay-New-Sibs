@@ -37,7 +37,7 @@ def _get_variable_chunk_size(batch_size: int) -> int:
     return random.randint(lower_bound, upper_bound)
 
 
-def _load_custom_data(card: Card) -> dict[str, Any]:
+def _load_custom_data(card: Card | CardSnapshot) -> dict[str, Any]:
     """Return a parsed copy of a card's custom_data payload."""
 
     raw_custom_data = getattr(card, "custom_data", "")
@@ -83,11 +83,7 @@ def card_is_ignored(card: Card | CardSnapshot) -> bool:
 
 
 def set_card_ignored(col: Collection, card: Card) -> None:
-    """Mark a card as ignored while preserving other custom_data keys."""
-
-    fresh_card = col.get_card(card.id)
-    if fresh_card.queue == QUEUE_TYPE_SUSPENDED:
-        col.sched.unsuspend_cards([card.id])
+    """Mark a card as ignored while preserving its current suspension state."""
 
     fresh_card = col.get_card(card.id)
     custom_data = _load_custom_data(fresh_card)
