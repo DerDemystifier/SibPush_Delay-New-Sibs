@@ -56,7 +56,7 @@ from .state import (
 )
 from .processing.suspension import (
     clear_all_addon_ignored_markers,
-    get_ignored_card_ids,
+    get_ignored_card_ids_chunked,
     unsuspend_all_addon_cards_in_deck,
     unsuspend_all_addon_cards,
 )
@@ -108,7 +108,9 @@ def _apply_pending_browser_work_before_scan(
 
 
 def _apply_pending_browser_work_after_scan(
-    col: Collection, pending_browser_work: dict[str, Any]
+    col: Collection,
+    pending_browser_work: dict[str, Any],
+    on_complete: Callable[[], None] | None = None,
 ) -> None:
     """Apply queued browser work that should happen after the modified-note scan.
 
@@ -121,7 +123,9 @@ def _apply_pending_browser_work_after_scan(
     """
 
     if pending_browser_work["pending_unmanaged_refresh"]:
-        process_new_unmanaged_notes(col)
+        process_new_unmanaged_notes(col, on_complete=on_complete)
+    elif on_complete is not None:
+        on_complete()
 
 
 def collection_did_load(col: Collection) -> None:
@@ -199,7 +203,11 @@ def browser_render(browser: Any) -> None:
         _pending_browser_scan = False
 
     def _run_browser_render() -> None:
+        scan_succeeded = False
+
         def _after_modified_scan_success() -> None:
+            nonlocal scan_succeeded
+            scan_succeeded = True
             global _skip_next_browser_render_scan
             if clear_stale_sync_mod_ts():
                 save_persistent_state(col)
@@ -208,14 +216,23 @@ def browser_render(browser: Any) -> None:
             # immediately schedule a second pass just because the UI redrew after the changes.
             _skip_next_browser_render_scan = True
 
+        def _after_modified_scan_complete() -> None:
+            if not scan_succeeded:
+                _clear_pending_browser_scan()
+                return
+
             if browser_scan_since_ts > 0:
-                _apply_pending_browser_work_after_scan(col, pending_browser_work)
+                _apply_pending_browser_work_after_scan(
+                    col, pending_browser_work, on_complete=_clear_pending_browser_scan
+                )
+            else:
+                _clear_pending_browser_scan()
 
         try:
             process_modified_notes(
                 col,
                 browser_scan_since_ts,
-                on_complete=_clear_pending_browser_scan,
+                on_complete=_after_modified_scan_complete,
                 on_success=_after_modified_scan_success,
             )
         except Exception:
@@ -304,7 +321,8 @@ def on_addon_delete(_: Any, ids: list[str]) -> None:
         ids (list[str]): The ids selected for deletion.
 
     Returns:
-        None: The add-on's cards are restored and hooks torn down immediately.
+        None: The add-on's cards are restored cooperatively and hooks are torn down immediately;
+            large cleanup batches finish through the Qt event loop.
     """
 
     if _addon_module_name() in ids:
@@ -325,27 +343,103 @@ def on_addon_delete(_: Any, ids: list[str]) -> None:
         current_mw = get_mw()
         if current_mw is not None and getattr(current_mw, "col", None):
             col = current_mw.col
-            # Deletion can happen before any browser render, so migrate the legacy representation
-            # before capturing the exclusion set used by restoration.
-            migrate_legacy_ignore_markers(col)
-            ignored_card_ids = get_ignored_card_ids(col)
-            ignored_count = len(ignored_card_ids)
-            confirmed = False
-            if ignored_count > 0:
-                confirmed = _ask_user(
-                    f"{ignored_count} card(s) in your collection have been marked as ignored by SibPush. "
-                    f"Do you want to clear this marker now?\n\n"
-                    f"If you clear it, reinstalling SibPush later will not remember which cards were ignored.",
-                    parent=current_mw,
-                    defaultno=True,
-                )
-            # Restore first using the captured exclusion set. A card carrying both markers must
-            # not become eligible merely because the user confirmed clearing ignored markers.
-            unsuspend_all_addon_cards(col, excluded_card_ids=ignored_card_ids)
-            if ignored_count > 0 and confirmed:
-                clear_all_addon_ignored_markers(col)
+            deletion_finished = False
+            migration_stage_continued = False
+            ignored_scan_continued = False
+            restore_stage_continued = False
 
-    logging.shutdown()
+            def _finish_deletion() -> None:
+                nonlocal deletion_finished
+                if deletion_finished:
+                    return
+                deletion_finished = True
+                logging.shutdown()
+
+            def _finish_migration_stage() -> None:
+                if not migration_stage_continued:
+                    _finish_deletion()
+
+            def _finish_ignored_scan_stage() -> None:
+                if not ignored_scan_continued:
+                    _finish_deletion()
+
+            def _after_ignored_scan(ignored_card_ids: set[int]) -> None:
+                nonlocal ignored_scan_continued, restore_stage_continued
+                ignored_scan_continued = True
+                try:
+                    ignored_count = len(ignored_card_ids)
+                    confirmed = False
+                    if ignored_count > 0:
+                        confirmed = _ask_user(
+                            f"{ignored_count} card(s) in your collection have been marked as ignored by SibPush. "
+                            f"Do you want to clear this marker now?\n\n"
+                            f"If you clear it, reinstalling SibPush later will not remember which cards were ignored.",
+                            parent=current_mw,
+                            defaultno=True,
+                        )
+
+                    def _after_restore() -> None:
+                        nonlocal restore_stage_continued
+                        restore_stage_continued = True
+                        try:
+                            if ignored_count > 0 and confirmed:
+                                clear_all_addon_ignored_markers(col, on_complete=_finish_deletion)
+                            else:
+                                _finish_deletion()
+                        except Exception:
+                            _finish_deletion()
+                            raise
+
+                    def _finish_restore_stage() -> None:
+                        if not restore_stage_continued:
+                            _finish_deletion()
+
+                    unsuspend_all_addon_cards(
+                        col,
+                        excluded_card_ids=ignored_card_ids,
+                        on_complete=_finish_restore_stage,
+                        on_success=_after_restore,
+                    )
+                except Exception:
+                    _finish_deletion()
+                    raise
+
+            def _start_ignored_scan() -> None:
+                try:
+                    get_ignored_card_ids_chunked(
+                        col,
+                        on_complete=_finish_ignored_scan_stage,
+                        on_success=_after_ignored_scan,
+                    )
+                except Exception:
+                    _finish_deletion()
+                    raise
+
+            def _start_deletion_scan() -> None:
+                nonlocal migration_stage_continued
+                migration_stage_continued = True
+                try:
+                    _start_ignored_scan()
+                except Exception:
+                    _finish_deletion()
+                    raise
+
+            try:
+                # Deletion can happen before any browser render, so migrate legacy data before
+                # collecting the exclusion set used by restoration.
+                migrate_legacy_ignore_markers(
+                    col,
+                    on_complete=_finish_migration_stage,
+                    on_success=_start_deletion_scan,
+                )
+            except Exception:
+                _finish_deletion()
+                raise
+        else:
+            logging.shutdown()
+
+    if _addon_module_name() not in ids:
+        logging.shutdown()
 
 
 def register_hooks() -> None:

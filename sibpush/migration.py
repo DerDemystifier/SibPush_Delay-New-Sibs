@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any, cast
 
 from anki.collection import Collection
@@ -12,6 +12,7 @@ from anki.notes import NoteId
 
 from .logging_support import logThis
 from . import state
+from .processing.chunked_runner import run_chunked
 from .processing.notes import process_all_notes
 from .processing.suspension import card_is_suspended_by_addon, mark_card_suspended_by_addon
 
@@ -22,7 +23,15 @@ VERSION_2_1_0 = (2, 1, 0)
 StartupMigration = Callable[[Collection, Callable[[], None] | None], None]
 
 
-def migrate_legacy_ignore_markers(col: Collection) -> None:
+MIGRATION_BATCH_SIZE = 1000
+MIGRATION_BATCH_PAUSE_MS = 100
+
+
+def migrate_legacy_ignore_markers(
+    col: Collection,
+    on_complete: Callable[[], None] | None = None,
+    on_success: Callable[[], None] | None = None,
+) -> None:
     """Convert the legacy ``{"sibpush": "ignored"}`` data to the ignore marker.
 
     The search is intentionally broad and the JSON/value check remains authoritative. Invalid
@@ -33,39 +42,55 @@ def migrate_legacy_ignore_markers(col: Collection) -> None:
     skipped_count = 0
     candidate_ids = col.find_cards(f"has-cd:{state.LEGACY_ADDON_CUSTOM_DATA_KEY}")
 
-    for card_id in candidate_ids:
-        card = col.get_card(card_id)
-        raw_custom_data = getattr(card, "custom_data", "")
-        try:
-            parsed: Any = json.loads(raw_custom_data) if raw_custom_data else {}
-        except (TypeError, json.JSONDecodeError):
-            skipped_count += 1
-            continue
+    def _migrate_chunk(card_ids: Sequence[int]) -> None:
+        nonlocal migrated_count, skipped_count
+        for card_id in card_ids:
+            card = col.get_card(card_id)
+            raw_custom_data = getattr(card, "custom_data", "")
+            try:
+                parsed: Any = json.loads(raw_custom_data) if raw_custom_data else {}
+            except (TypeError, json.JSONDecodeError):
+                skipped_count += 1
+                continue
 
-        if not isinstance(parsed, dict):
-            skipped_count += 1
-            continue
+            if not isinstance(parsed, dict):
+                skipped_count += 1
+                continue
 
-        parsed = cast(dict[str, Any], parsed)
-        if parsed.get(state.LEGACY_ADDON_CUSTOM_DATA_KEY) == state.LEGACY_ADDON_CUSTOM_DATA_IGNORED_VALUE:
-            parsed[state.SIBPUSH_IGNORED_KEY] = state.SIBPUSH_MARKER_VALUE
-            parsed.pop(state.LEGACY_ADDON_CUSTOM_DATA_KEY, None)
-            card.custom_data = json.dumps(parsed, ensure_ascii=False) if parsed else ""
-            col.update_card(card)
-            migrated_count += 1
+            parsed = cast(dict[str, Any], parsed)
+            if parsed.get(state.LEGACY_ADDON_CUSTOM_DATA_KEY) == state.LEGACY_ADDON_CUSTOM_DATA_IGNORED_VALUE:
+                parsed[state.SIBPUSH_IGNORED_KEY] = state.SIBPUSH_MARKER_VALUE
+                parsed.pop(state.LEGACY_ADDON_CUSTOM_DATA_KEY, None)
+                card.custom_data = json.dumps(parsed, ensure_ascii=False) if parsed else ""
+                col.update_card(card)
+                migrated_count += 1
 
-    if migrated_count or skipped_count:
-        logThis(
-            lambda: (
-                "SibPush migrated "
-                f"{migrated_count:,} legacy ignored card marker(s)"
-                + (f"; skipped {skipped_count:,} invalid payload(s)" if skipped_count else "")
+    def _finish_migration() -> None:
+        if migrated_count or skipped_count:
+            logThis(
+                lambda: (
+                    "SibPush migrated "
+                    f"{migrated_count:,} legacy ignored card marker(s)"
+                    + (f"; skipped {skipped_count:,} invalid payload(s)" if skipped_count else "")
+                )
             )
-        )
+        if on_success is not None:
+            on_success()
+
+    run_chunked(
+        list(candidate_ids),
+        _migrate_chunk,
+        batch_size=MIGRATION_BATCH_SIZE,
+        pause_ms=MIGRATION_BATCH_PAUSE_MS,
+        on_complete=on_complete,
+        on_success=_finish_migration,
+    )
 
 
 def migrate_legacy_suspension_tag(
-    col: Collection, on_complete: Callable[[], None] | None = None
+    col: Collection,
+    on_complete: Callable[[], None] | None = None,
+    on_success: Callable[[], None] | None = None,
 ) -> None:
     """Convert legacy suspension tags into card-level suspension provenance.
 
@@ -77,27 +102,34 @@ def migrate_legacy_suspension_tag(
         None: The migration is performed for its side effects.
     """
     tagged_note_ids: set[NoteId] = set()
+    marked_card_count = 0
+    completion_called = False
+    collection_stage_continued = False
 
-    for card_id in col.find_cards(f"tag:{LEGACY_SUSPENDED_TAG}"):
-        card = col.get_card(card_id)
-        note = card.note()
-        tagged_note_ids.add(note.id)
-
-    if not tagged_note_ids:
+    def _complete() -> None:
+        nonlocal completion_called
+        if completion_called:
+            return
+        completion_called = True
         if on_complete is not None:
             on_complete()
-        return
 
-    marked_card_count = 0
-    for note_id in tagged_note_ids:
-        for card_id in col.card_ids_of_note(note_id):
+    def _collect_tagged_notes(card_ids: Sequence[int]) -> None:
+        for card_id in card_ids:
             card = col.get_card(card_id)
-            if card.queue != QUEUE_TYPE_SUSPENDED or card_is_suspended_by_addon(card):
-                continue
+            tagged_note_ids.add(card.note().id)
 
-            mark_card_suspended_by_addon(col, card)
-            if card_is_suspended_by_addon(col.get_card(card.id)):
-                marked_card_count += 1
+    def _mark_tagged_note_chunk(note_ids: Sequence[NoteId]) -> None:
+        nonlocal marked_card_count
+        for note_id in note_ids:
+            for card_id in col.card_ids_of_note(note_id):
+                card = col.get_card(card_id)
+                if card.queue != QUEUE_TYPE_SUSPENDED or card_is_suspended_by_addon(card):
+                    continue
+
+                mark_card_suspended_by_addon(col, card)
+                if card_is_suspended_by_addon(col.get_card(card.id)):
+                    marked_card_count += 1
 
     def _finish_migration() -> None:
         col.tags.remove(LEGACY_SUSPENDED_TAG)
@@ -110,10 +142,40 @@ def migrate_legacy_suspension_tag(
             )
         )
 
-        if on_complete is not None:
-            on_complete()
+        if on_success is not None:
+            on_success()
 
-    _finish_migration()
+    def _start_card_migration() -> None:
+        nonlocal collection_stage_continued
+        collection_stage_continued = True
+        if not tagged_note_ids:
+            if on_success is not None:
+                on_success()
+            else:
+                _complete()
+            return
+
+        run_chunked(
+            list(tagged_note_ids),
+            _mark_tagged_note_chunk,
+            batch_size=MIGRATION_BATCH_SIZE,
+            pause_ms=MIGRATION_BATCH_PAUSE_MS,
+            on_complete=_complete,
+            on_success=_finish_migration,
+        )
+
+    def _finish_collection_stage() -> None:
+        if not collection_stage_continued:
+            _complete()
+
+    run_chunked(
+        list(col.find_cards(f"tag:{LEGACY_SUSPENDED_TAG}")),
+        _collect_tagged_notes,
+        batch_size=MIGRATION_BATCH_SIZE,
+        pause_ms=MIGRATION_BATCH_PAUSE_MS,
+        on_complete=_finish_collection_stage,
+        on_success=_start_card_migration,
+    )
 
 
 def migrate_to_version_2(
@@ -130,28 +192,69 @@ def migrate_to_version_2(
         state.save_persistent_state(col)
         state.installed_version = state.ADDON_VERSION
         logThis("SibPush performed version-2 recovery on collection load")
+
+    completion_called = False
+    suspension_stage_continued = False
+    ignore_stage_continued = False
+
+    def _complete() -> None:
+        nonlocal completion_called
+        if completion_called:
+            return
+        completion_called = True
         if on_complete is not None:
             on_complete()
 
     def _after_legacy_cleanup() -> None:
-        migrate_legacy_ignore_markers(col)
-        process_all_notes(col)
-        _finish_version_2_recovery()
+        nonlocal ignore_stage_continued
+        ignore_stage_continued = True
+        migrate_legacy_ignore_markers(
+            col,
+            on_complete=_finish_ignore_stage,
+            on_success=lambda: process_all_notes(
+                col, on_complete=_complete, on_success=_finish_version_2_recovery
+            ),
+        )
 
-    migrate_legacy_suspension_tag(col, on_complete=_after_legacy_cleanup)
+    def _finish_ignore_stage() -> None:
+        if not ignore_stage_continued:
+            _complete()
+
+    def _start_ignore_stage() -> None:
+        nonlocal suspension_stage_continued
+        suspension_stage_continued = True
+        try:
+            _after_legacy_cleanup()
+        except Exception:
+            _complete()
+            raise
+
+    def _finish_suspension_stage() -> None:
+        if not suspension_stage_continued:
+            _complete()
+
+    migrate_legacy_suspension_tag(
+        col, on_complete=_finish_suspension_stage, on_success=_start_ignore_stage
+    )
 
 
 def migrate_to_version_2_1(
-    col: Collection, on_complete: Callable[[], None] | None = None
+    col: Collection,
+    on_complete: Callable[[], None] | None = None,
+    on_success: Callable[[], None] | None = None,
 ) -> None:
     """Migrate the independent card markers for direct upgrades from version 2.0."""
 
-    migrate_legacy_ignore_markers(col)
-    state.installed_version = state.ADDON_VERSION
-    state.save_persistent_state(col)
-    logThis("SibPush migrated legacy card markers to independent provenance markers")
-    if on_complete is not None:
-        on_complete()
+    def _finish_migration() -> None:
+        state.installed_version = state.ADDON_VERSION
+        state.save_persistent_state(col)
+        logThis("SibPush migrated legacy card markers to independent provenance markers")
+        if on_success is not None:
+            on_success()
+
+    migrate_legacy_ignore_markers(
+        col, on_complete=on_complete, on_success=_finish_migration
+    )
 
 
 _STARTUP_MIGRATIONS: tuple[tuple[tuple[int, int, int], StartupMigration], ...] = (

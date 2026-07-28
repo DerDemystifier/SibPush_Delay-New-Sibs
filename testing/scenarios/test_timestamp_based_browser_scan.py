@@ -103,8 +103,12 @@ def test_browser_render_applies_queued_browser_work_before_scanning() -> None:
                 if callable(on_complete):
                     on_complete()
 
-            def fake_process_new_unmanaged_notes(col_arg: object) -> None:
+            def fake_process_new_unmanaged_notes(
+                col_arg: object, on_complete: object | None = None
+            ) -> None:
                 events.append("unmanaged")
+                if callable(on_complete):
+                    on_complete()
 
             with patch.object(hooks_module.QTimer, "singleShot", side_effect=fake_single_shot), patch.object(
                 hooks_module, "reset_persistent_state", side_effect=fake_reset_persistent_state
@@ -164,8 +168,12 @@ def test_browser_render_runs_unmanaged_refresh_after_partial_scan() -> None:
                 if callable(on_complete):
                     on_complete()
 
-            def fake_process_new_unmanaged_notes(col_arg: object) -> None:
+            def fake_process_new_unmanaged_notes(
+                col_arg: object, on_complete: object | None = None
+            ) -> None:
                 events.append("unmanaged")
+                if callable(on_complete):
+                    on_complete()
 
             with patch.object(hooks_module.QTimer, "singleShot", side_effect=fake_single_shot), patch.object(
                 hooks_module, "process_modified_notes", side_effect=fake_process_modified_notes

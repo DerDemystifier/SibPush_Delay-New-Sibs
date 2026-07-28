@@ -82,6 +82,7 @@ from testing.scenarios.test_suspension_markers import (
     test_scheduler_failure_does_not_infer_suspension_provenance,
     test_scheduler_failure_preserves_restoration_provenance_after_partial_success,
     test_direct_legacy_ignore_clear_preserves_new_marker_and_third_party_data,
+    test_async_clear_all_ignored_markers_processes_every_candidate_in_chunks,
     test_normal_promotion_removes_suspension_provenance,
     test_async_deck_cleanup_stops_when_deck_is_unignored_between_chunks,
     test_async_deck_cleanup_skips_cards_moved_before_their_chunk,
@@ -99,6 +100,12 @@ from testing.scenarios.test_breaking_change_recovery import (
     test_browser_render_performs_recovery_when_version_is_missing,
     test_browser_render_reprocesses_legacy_suspension_tags_before_scan,
     test_collection_did_load_skips_recovery_when_future_version_is_stored,
+)
+from testing.scenarios.test_chunked_runner import (
+    test_run_chunked_yields_between_batches_and_reports_progress,
+    test_run_chunked_calls_completion_when_processing_fails,
+    test_run_chunked_stops_before_a_stale_next_batch,
+    test_run_chunked_completes_empty_work_as_success,
 )
 from testing.scenarios.test_suspend_new_siblings_when_an_immature_review_card_exists import (
     test_suspended_immature_review_card_does_not_block_new_siblings,
@@ -144,6 +151,10 @@ tests = {
     "test_browser_render_performs_recovery_when_version_is_missing": test_browser_render_performs_recovery_when_version_is_missing,
     "test_browser_render_reprocesses_legacy_suspension_tags_before_scan": test_browser_render_reprocesses_legacy_suspension_tags_before_scan,
     "test_collection_did_load_skips_recovery_when_future_version_is_stored": test_collection_did_load_skips_recovery_when_future_version_is_stored,
+    "test_run_chunked_yields_between_batches_and_reports_progress": test_run_chunked_yields_between_batches_and_reports_progress,
+    "test_run_chunked_calls_completion_when_processing_fails": test_run_chunked_calls_completion_when_processing_fails,
+    "test_run_chunked_stops_before_a_stale_next_batch": test_run_chunked_stops_before_a_stale_next_batch,
+    "test_run_chunked_completes_empty_work_as_success": test_run_chunked_completes_empty_work_as_success,
     "test_suspended_immature_review_card_does_not_block_new_siblings": test_suspended_immature_review_card_does_not_block_new_siblings,
     "test_sibpush_marks_only_cards_it_suspends": test_sibpush_marks_only_cards_it_suspends,
     "test_manual_unsuspend_retains_provenance_until_sibpush_restores_card": test_manual_unsuspend_retains_provenance_until_sibpush_restores_card,
@@ -157,6 +168,7 @@ tests = {
     "test_scheduler_failure_does_not_infer_suspension_provenance": test_scheduler_failure_does_not_infer_suspension_provenance,
     "test_scheduler_failure_preserves_restoration_provenance_after_partial_success": test_scheduler_failure_preserves_restoration_provenance_after_partial_success,
     "test_direct_legacy_ignore_clear_preserves_new_marker_and_third_party_data": test_direct_legacy_ignore_clear_preserves_new_marker_and_third_party_data,
+    "test_async_clear_all_ignored_markers_processes_every_candidate_in_chunks": test_async_clear_all_ignored_markers_processes_every_candidate_in_chunks,
     "test_normal_promotion_removes_suspension_provenance": test_normal_promotion_removes_suspension_provenance,
     "test_async_deck_cleanup_stops_when_deck_is_unignored_between_chunks": test_async_deck_cleanup_stops_when_deck_is_unignored_between_chunks,
     "test_async_deck_cleanup_skips_cards_moved_before_their_chunk": test_async_deck_cleanup_skips_cards_moved_before_their_chunk,
