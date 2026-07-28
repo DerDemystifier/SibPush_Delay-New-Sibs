@@ -24,13 +24,14 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from typing import Any, cast
 
 from anki.cards import Card
 from anki.collection import Collection
 from aqt import gui_hooks
 from aqt.qt import QTimer
-from aqt.utils import askUser
+from aqt import utils as aqt_utils
 
 from .config.migration import migrate_legacy_config
 from .config.parser import load_config_state, on_config_display, on_config_save
@@ -65,6 +66,13 @@ from .ui.deck_actions import add_deck_actions_to_options_menu
 _BROWSER_SCAN_DELAY_MS = 500
 _pending_browser_scan = False
 _skip_next_browser_render_scan = False
+askUser: Callable[..., bool] = cast(Callable[..., bool], cast(Any, aqt_utils).askUser)
+
+
+def _ask_user(*args: Any, **kwargs: Any) -> bool:
+    """Call Anki's incompletely typed confirmation helper."""
+
+    return bool(askUser(*args, **kwargs))
 
 
 def _addon_module_name() -> str:
@@ -230,7 +238,7 @@ def browser_render(browser: Any) -> None:
         raise
 
 
-def reviewer_did_answer_card(reviewer: Any, card: Card, ease: int) -> None:
+def reviewer_did_answer_card(reviewer: Any, card: Card, _: int) -> None:
     """Process a note after the reviewer answers one of its cards.
 
     Args:
@@ -248,7 +256,7 @@ def reviewer_did_answer_card(reviewer: Any, card: Card, ease: int) -> None:
     process_note(reviewer.mw.col, card.nid, coming_from_reviewer_hook=True)
 
 
-def sync_did_finish(*_args: Any) -> None:
+def sync_did_finish(*_: Any) -> None:
     """Queue unmanaged-note refresh and persist the sync watermark.
 
     Returns:
@@ -288,7 +296,7 @@ def collection_did_temporarily_close(col: Collection) -> None:
     save_persistent_state(col)
 
 
-def on_addon_delete(dialog: Any, ids: list[str]) -> None:
+def on_addon_delete(_: Any, ids: list[str]) -> None:
     """Restore add-on-managed cards and deregister all hooks before the add-on is deleted.
 
     Args:
@@ -324,7 +332,7 @@ def on_addon_delete(dialog: Any, ids: list[str]) -> None:
             ignored_count = len(ignored_card_ids)
             confirmed = False
             if ignored_count > 0:
-                confirmed = askUser(
+                confirmed = _ask_user(
                     f"{ignored_count} card(s) in your collection have been marked as ignored by SibPush. "
                     f"Do you want to clear this marker now?\n\n"
                     f"If you clear it, reinstalling SibPush later will not remember which cards were ignored.",

@@ -31,7 +31,7 @@ def _add_action(menu: QMenu, label: str, handler: Callable[[int], None], deck_id
 
     action: Any = cast(Any, menu).addAction(label)
     if action is not None:
-        action.triggered.connect(lambda _checked=False, did=deck_id: handler(did))  # type: ignore[union-attr]
+        action.triggered.connect(lambda _=False, did=deck_id: handler(did))  # type: ignore[union-attr]
 
 
 def _get_deck_name(col: Any, deck_id: int) -> str:

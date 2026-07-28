@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from . import parser
 from ..state import CONFIG_IGNORED_KEY, get_config_file_path, get_mw
@@ -45,12 +45,12 @@ def _build_migrated_config(
 
     lookup = deck_lookup or {}
     migrated_rules: list[dict[str, Any]] = []
-    default_interval = parser._parse_int(config.get("default_interval", 30), 30)
-    legacy_rule_interval = parser._parse_int(
+    default_interval = parser.parse_int(config.get("default_interval", 30), 30)
+    legacy_rule_interval = parser.parse_int(
         config.get("interval", default_interval), default_interval
     )
 
-    for deck_label in legacy_ignored_decks:
+    for deck_label in cast(list[object], legacy_ignored_decks):
         raw_label = str(deck_label).strip()
         if not raw_label:
             continue
@@ -93,21 +93,22 @@ def migrate_legacy_config() -> bool:
     if addon_manager is None:
         return False
 
-    current_config = addon_manager.getConfig(parser._addon_module_name())
+    current_config = addon_manager.getConfig(parser.addon_module_name())
     if not isinstance(current_config, dict):
         return False
+    current_config = cast(dict[str, Any], current_config)
 
     if "ignored_decks" in current_config:
         migrated_config = _build_migrated_config(current_config, _get_deck_lookup())
         if migrated_config is None:
             return False
 
-        parser._save_profile_config(migrated_config)
+        parser.save_profile_config(migrated_config)
         parser.config_settings.clear()
         parser.config_settings.update(parser.parse_config(migrated_config))
         return True
 
-    parser._save_profile_config(current_config)
+    parser.save_profile_config(current_config)
     parser.config_settings.clear()
     parser.config_settings.update(parser.parse_config(current_config))
     return True
