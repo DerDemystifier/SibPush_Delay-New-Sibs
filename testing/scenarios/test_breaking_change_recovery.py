@@ -221,6 +221,9 @@ def test_browser_render_reprocesses_legacy_suspension_tags_before_scan() -> None
                 assert state_module.ADDON_CUSTOM_DATA_KEY not in card_custom_data(col, cards[0])
                 assert state_module.ADDON_CUSTOM_DATA_KEY not in card_custom_data(col, cards[1])
                 assert state_module.ADDON_CUSTOM_DATA_KEY not in card_custom_data(col, manual_cards[1])
+                assert state_module.SIBPUSH_SUSPENDED_KEY not in card_custom_data(col, cards[0])
+                assert card_custom_data(col, cards[1]).get(state_module.SIBPUSH_SUSPENDED_KEY) is True
+                assert state_module.SIBPUSH_SUSPENDED_KEY not in card_custom_data(col, manual_cards[1])
                 if callable(on_success):
                     on_success()
                 if callable(on_complete):
@@ -240,6 +243,9 @@ def test_browser_render_reprocesses_legacy_suspension_tags_before_scan() -> None
             assert state_module.ADDON_CUSTOM_DATA_KEY not in card_custom_data(col, cards[0])
             assert state_module.ADDON_CUSTOM_DATA_KEY not in card_custom_data(col, cards[1])
             assert state_module.ADDON_CUSTOM_DATA_KEY not in card_custom_data(col, manual_cards[1])
+            assert state_module.SIBPUSH_SUSPENDED_KEY not in card_custom_data(col, cards[0])
+            assert card_custom_data(col, cards[1]).get(state_module.SIBPUSH_SUSPENDED_KEY) is True
+            assert state_module.SIBPUSH_SUSPENDED_KEY not in card_custom_data(col, manual_cards[1])
             assert json.loads(state_file.read_text(encoding="utf-8")) == {
                 "addon_version": state_module.ADDON_VERSION,
             }

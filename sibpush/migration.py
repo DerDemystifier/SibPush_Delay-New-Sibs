@@ -5,10 +5,12 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from anki.collection import Collection
+from anki.consts import QUEUE_TYPE_SUSPENDED
 
 from .logging_support import logThis
 from . import state
 from .processing.notes import process_all_notes
+from .processing.suspension import card_is_suspended_by_addon, mark_card_suspended_by_addon
 
 LEGACY_SUSPENDED_TAG = "SibPush-suspended"
 VERSION_2_0_0 = (2, 0, 0)
@@ -61,7 +63,15 @@ def migrate_legacy_ignore_markers(col: Collection) -> None:
 def migrate_legacy_suspension_tag(
     col: Collection, on_complete: Callable[[], None] | None = None
 ) -> None:
-    """Clear the legacy add-on tag from tagged notes."""
+    """Convert legacy suspension tags into card-level suspension provenance.
+
+    Args:
+        col (anki.collection.Collection): The collection containing the tagged notes.
+        on_complete (Callable[[], None] | None): Optional callback after tag cleanup.
+
+    Returns:
+        None: The migration is performed for its side effects.
+    """
     tagged_note_ids: set[int] = set()
 
     for card_id in col.find_cards(f"tag:{LEGACY_SUSPENDED_TAG}"):
@@ -74,13 +84,25 @@ def migrate_legacy_suspension_tag(
             on_complete()
         return
 
+    marked_card_count = 0
+    for note_id in tagged_note_ids:
+        for card_id in col.card_ids_of_note(note_id):
+            card = col.get_card(card_id)
+            if card.queue != QUEUE_TYPE_SUSPENDED or card_is_suspended_by_addon(card):
+                continue
+
+            mark_card_suspended_by_addon(col, card)
+            if card_is_suspended_by_addon(col.get_card(card.id)):
+                marked_card_count += 1
+
     def _finish_migration() -> None:
         col.tags.remove(LEGACY_SUSPENDED_TAG)
 
         logThis(
             lambda: (
                 "SibPush migrated legacy suspension tags on "
-                f"{len(tagged_note_ids):,} note(s)"
+                f"{len(tagged_note_ids):,} note(s); marked "
+                f"{marked_card_count:,} suspended card(s)"
             )
         )
 
