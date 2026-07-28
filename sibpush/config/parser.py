@@ -40,6 +40,12 @@ def _addon_module_name() -> str:
     return package_name.split(".", 1)[0]
 
 
+def addon_module_name() -> str:
+    """Return the top-level module name for callers outside this parser module."""
+
+    return _addon_module_name()
+
+
 def _get_addon_manager() -> Any | None:
     """Return the live add-on manager when Anki is running.
 
@@ -148,6 +154,12 @@ def _save_profile_config(config: dict[str, Any], col: Any | None = None) -> None
     _write_profile_config_file(config_file, config)
 
 
+def save_profile_config(config: dict[str, Any], col: Any | None = None) -> None:
+    """Persist a profile config for migration and other parser integrations."""
+
+    _save_profile_config(config, col)
+
+
 def _parse_int(value: Any, default: int) -> int:
     """Convert a value to an integer, falling back to a default when needed.
 
@@ -163,6 +175,12 @@ def _parse_int(value: Any, default: int) -> int:
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def parse_int(value: Any, default: int) -> int:
+    """Parse an integer for callers outside this parser module."""
+
+    return _parse_int(value, default)
 
 
 def _normalize_custom_deck_rule(rule: Any, default_interval: int) -> dict[str, Any] | None:

@@ -141,13 +141,13 @@ def _format_snapshot_line(
     )
 
 
-def _format_note_header(note: Any, col: Collection, note_id: int) -> list[str]:
+def _format_note_header(note: Any, col: Collection, note_id: int | str) -> list[str]:
     """Build the header lines for a note's log block.
 
     Args:
         note (Any): The Anki note to summarize.
         col (anki.collection.Collection): The collection containing the note.
-        note_id (int): The note identifier to display.
+        note_id (int | str): The note identifier or fallback label to display.
 
     Returns:
         list[str]: The header lines for the rendered note block.
@@ -164,7 +164,7 @@ def _format_note_header(note: Any, col: Collection, note_id: int) -> list[str]:
 def format_note_snapshot(
     note: Any,
     col: Collection,
-    note_id: int,
+    note_id: int | str,
     snapshots: list[CardSnapshot] | tuple[CardSnapshot, ...] | Sequence[CardSnapshot],
     section: str | None = None,
     previous_statuses: dict[int, str] | None = None,
@@ -175,7 +175,7 @@ def format_note_snapshot(
     Args:
         note (Any): The note being rendered.
         col (anki.collection.Collection): The collection containing the note.
-        note_id (int): The note identifier to display.
+        note_id (int | str): The note identifier or fallback label to display.
         snapshots (Sequence[CardSnapshot]): The card snapshots to render.
         section (str | None): Optional section heading such as "Before" or "After".
         previous_statuses (dict[int, str] | None): Optional previous status labels keyed by card id.
@@ -283,6 +283,13 @@ def cards_details(
         return "\n".join(card_details(card) for card in cards)
 
     note = cards[0].note()
-    display_note_id = note_id if note_id is not None else getattr(note, "id", "unknown")
+    raw_note_id = getattr(note, "id", None)
+    display_note_id: int | str = (
+        note_id
+        if note_id is not None
+        else raw_note_id
+        if isinstance(raw_note_id, (int, str))
+        else "unknown"
+    )
     snapshots = capture_snapshots(cards)
     return format_note_snapshot(note, col, display_note_id, snapshots)

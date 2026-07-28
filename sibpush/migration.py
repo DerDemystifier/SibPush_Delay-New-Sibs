@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from typing import Any, cast
+
 from anki.collection import Collection
 from anki.consts import QUEUE_TYPE_SUSPENDED
+from anki.notes import NoteId
 
 from .logging_support import logThis
 from . import state
@@ -34,7 +37,7 @@ def migrate_legacy_ignore_markers(col: Collection) -> None:
         card = col.get_card(card_id)
         raw_custom_data = getattr(card, "custom_data", "")
         try:
-            parsed = json.loads(raw_custom_data) if raw_custom_data else {}
+            parsed: Any = json.loads(raw_custom_data) if raw_custom_data else {}
         except (TypeError, json.JSONDecodeError):
             skipped_count += 1
             continue
@@ -43,6 +46,7 @@ def migrate_legacy_ignore_markers(col: Collection) -> None:
             skipped_count += 1
             continue
 
+        parsed = cast(dict[str, Any], parsed)
         if parsed.get(state.LEGACY_ADDON_CUSTOM_DATA_KEY) == state.LEGACY_ADDON_CUSTOM_DATA_IGNORED_VALUE:
             parsed[state.SIBPUSH_IGNORED_KEY] = state.SIBPUSH_MARKER_VALUE
             parsed.pop(state.LEGACY_ADDON_CUSTOM_DATA_KEY, None)
@@ -72,7 +76,7 @@ def migrate_legacy_suspension_tag(
     Returns:
         None: The migration is performed for its side effects.
     """
-    tagged_note_ids: set[int] = set()
+    tagged_note_ids: set[NoteId] = set()
 
     for card_id in col.find_cards(f"tag:{LEGACY_SUSPENDED_TAG}"):
         card = col.get_card(card_id)
