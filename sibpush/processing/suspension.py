@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import random
 from collections.abc import Sequence
 from typing import Any, Callable, cast
 
@@ -13,7 +12,7 @@ from ..cards.snapshots import CardSnapshot
 from anki.collection import Collection
 from anki.consts import QUEUE_TYPE_SUSPENDED
 from anki.notes import NoteId
-from aqt.qt import QTimer
+from aqt import qt as _qt
 from aqt.utils import tooltip
 
 from ..logging_support import logThis
@@ -25,6 +24,7 @@ from ..state import (
     SIBPUSH_MARKER_VALUE,
     SIBPUSH_SUSPENDED_KEY,
 )
+from .chunked_runner import run_chunked
 from .query import get_deck_rule, get_deck_rule_by_id
 
 DECK_UNSUSPEND_BATCH_SIZE = 1000
@@ -32,13 +32,7 @@ DECK_UNSUSPEND_BATCH_PAUSE_MS = 100
 DECK_UNSUSPEND_TOOLTIP_PERIOD_MS = 3000
 
 
-def _get_variable_chunk_size(batch_size: int) -> int:
-    """Return a slightly randomized chunk size around the provided batch size."""
-
-    jitter = max(1, round(batch_size * 0.1))
-    lower_bound = max(1, batch_size - jitter)
-    upper_bound = batch_size + jitter
-    return random.randint(lower_bound, upper_bound)
+QTimer = _qt.QTimer  # Compatibility seam for callers/tests patching the Qt timer.
 
 
 def _parse_custom_data(card: Card | CardSnapshot) -> dict[str, Any] | None:
@@ -152,8 +146,8 @@ def _marker_search(marker_key: str) -> str:
     return f"prop:cds:{marker_key}=true"
 
 
-def get_ignored_card_ids(col: Collection) -> set[CardId]:
-    """Return ignored card ids, including legacy data until migration completes."""
+def _get_ignored_card_candidates(col: Collection) -> set[CardId]:
+    """Return broad ignored-card candidates for later chunked validation."""
 
     queries = (
         _marker_search(SIBPUSH_IGNORED_KEY),
@@ -162,12 +156,51 @@ def get_ignored_card_ids(col: Collection) -> set[CardId]:
     card_ids: set[CardId] = set()
     for query in queries:
         card_ids.update(col.find_cards(query))
+    return card_ids
 
+
+def get_ignored_card_ids(col: Collection) -> set[CardId]:
+    """Return ignored card IDs synchronously for compatibility with external callers.
+
+    Active collection-wide workflows should use :func:`get_ignored_card_ids_chunked` so the
+    authoritative card validation yields between batches.
+    """
+
+    card_ids = _get_ignored_card_candidates(col)
     return {
         card_id
         for card_id in card_ids
         if card_is_ignored(col.get_card(card_id))
     }
+
+
+def get_ignored_card_ids_chunked(
+    col: Collection,
+    on_complete: Callable[[], None] | None = None,
+    on_success: Callable[[set[CardId]], None] | None = None,
+) -> None:
+    """Collect authoritative ignored IDs without scanning every candidate synchronously."""
+
+    candidate_ids = list(_get_ignored_card_candidates(col))
+    ignored_card_ids: set[CardId] = set()
+
+    def _collect_chunk(card_ids: Sequence[CardId]) -> None:
+        for card_id in card_ids:
+            if card_is_ignored(col.get_card(card_id)):
+                ignored_card_ids.add(card_id)
+
+    def _finish_collection() -> None:
+        if on_success is not None:
+            on_success(ignored_card_ids)
+
+    run_chunked(
+        candidate_ids,
+        _collect_chunk,
+        batch_size=DECK_UNSUSPEND_BATCH_SIZE,
+        pause_ms=DECK_UNSUSPEND_BATCH_PAUSE_MS,
+        on_complete=on_complete,
+        on_success=_finish_collection,
+    )
 
 
 def _clear_ignored_markers(col: Collection, card: Card) -> bool:
@@ -195,7 +228,9 @@ def _clear_ignored_markers(col: Collection, card: Card) -> bool:
     return True
 
 
-def clear_all_addon_ignored_markers(col: Collection) -> None:
+def clear_all_addon_ignored_markers(
+    col: Collection, on_complete: Callable[[], None] | None = None
+) -> None:
     """Remove the ignored marker from every card in the collection that carries it.
 
     Operates collection-wide with no deck or card-type restriction.  Suspend state
@@ -203,8 +238,21 @@ def clear_all_addon_ignored_markers(col: Collection) -> None:
     responsibility.
     """
 
-    for card_id in get_ignored_card_ids(col):
-        _clear_ignored_markers(col, col.get_card(card_id))
+    candidate_ids = list(_get_ignored_card_candidates(col))
+
+    def _clear_chunk(card_ids: Sequence[CardId]) -> None:
+        for card_id in card_ids:
+            card = col.get_card(card_id)
+            if card_is_ignored(card):
+                _clear_ignored_markers(col, card)
+
+    run_chunked(
+        candidate_ids,
+        _clear_chunk,
+        batch_size=DECK_UNSUSPEND_BATCH_SIZE,
+        pause_ms=DECK_UNSUSPEND_BATCH_PAUSE_MS,
+        on_complete=on_complete,
+    )
 
 
 def suspend_cards(col: Collection, cards_to_suspend: Sequence[Card], note_id: NoteId) -> None:
@@ -351,18 +399,14 @@ def _restore_chunk(
 def _candidate_restore_ids(
     col: Collection, query: str | Sequence[str], deck_id: str | None = None
 ) -> list[CardId]:
-    """Find broad search candidates and apply authoritative Python validation."""
+    """Find broad candidates for authoritative validation in restore chunks."""
 
     queries = (query,) if isinstance(query, str) else query
     candidate_ids: set[CardId] = set()
     for candidate_query in queries:
         candidate_ids.update(col.find_cards(candidate_query))
 
-    return [
-        card_id
-        for card_id in candidate_ids
-        if _is_restore_candidate(col, card_id, deck_id=deck_id)
-    ]
+    return list(candidate_ids)
 
 
 def unsuspend_all_addon_cards_in_deck(col: Collection, deck_id: str) -> None:
@@ -384,57 +428,29 @@ def unsuspend_all_addon_cards_in_deck(col: Collection, deck_id: str) -> None:
 
     total_count = len(card_ids_to_unsuspend)
 
-    def _show_unsuspend_progress(processed_count: int) -> None:
+    def _show_unsuspend_progress(processed_count: int, _total_count: int) -> None:
         tooltip(
             f"SibPush has restored {processed_count:,}/{total_count:,} cards from the ignored deck",
             period=DECK_UNSUSPEND_TOOLTIP_PERIOD_MS,
         )
 
-    def _finish_unsuspending() -> None:
-        return
-
-    if total_count <= DECK_UNSUSPEND_BATCH_SIZE:
-        restored_count = _restore_chunk(col, card_ids_to_unsuspend, deck_id=str(deck_id))
-        _show_unsuspend_progress(restored_count)
-        _finish_unsuspending()
-        return
-
-    displayed_count = 0
-
-    def _process_chunk(start_index: int = 0) -> None:
-        nonlocal displayed_count
-        if not bool((get_deck_rule_by_id(str(deck_id)) or {}).get(CONFIG_IGNORED_KEY)):
-            _finish_unsuspending()
-            return
-
-        chunk_size = _get_variable_chunk_size(DECK_UNSUSPEND_BATCH_SIZE)
-        chunk = card_ids_to_unsuspend[start_index : start_index + chunk_size]
-        if not chunk:
-            _finish_unsuspending()
-            return
-
-        _restore_chunk(col, chunk, deck_id=str(deck_id))
-        displayed_count = min(total_count, displayed_count + len(chunk))
-        _show_unsuspend_progress(displayed_count)
-
-        next_index = start_index + len(chunk)
-        if next_index >= total_count:
-            _finish_unsuspending()
-            return
-
-        cast(Any, QTimer).singleShot(
-            DECK_UNSUSPEND_BATCH_PAUSE_MS,
-            lambda next_start_index=next_index: _process_chunk(next_start_index),
-        )
-
-    _show_unsuspend_progress(0)
-    cast(Any, QTimer).singleShot(0, _process_chunk)
+    run_chunked(
+        card_ids_to_unsuspend,
+        lambda chunk: _restore_chunk(col, chunk, deck_id=str(deck_id)),
+        batch_size=DECK_UNSUSPEND_BATCH_SIZE,
+        pause_ms=DECK_UNSUSPEND_BATCH_PAUSE_MS,
+        on_progress=_show_unsuspend_progress,
+        should_continue=lambda: bool(
+            (get_deck_rule_by_id(str(deck_id)) or {}).get(CONFIG_IGNORED_KEY)
+        ),
+    )
 
 
 def unsuspend_all_addon_cards(
     col: Collection,
     pause_ms: int | None = None,
     on_complete: Callable[[], None] | None = None,
+    on_success: Callable[[], None] | None = None,
     excluded_card_ids: set[CardId] | None = None,
 ) -> None:
     """Unsuspend all add-on-managed cards across every deck.
@@ -443,10 +459,12 @@ def unsuspend_all_addon_cards(
         col (anki.collection.Collection): The collection that owns the cards.
 
     Args:
-        pause_ms (int | None): Optional pause between chunks. When omitted, the unsuspend runs
-            immediately, preserving the current delete-time behavior.
+        pause_ms (int | None): Optional pause between chunks. When omitted, the first batch runs
+            immediately and later batches yield with a zero-millisecond Qt timer.
         on_complete (Callable[[], None] | None): Optional callback that runs after all cards are
             restored.
+        on_success (Callable[[], None] | None): Optional callback that runs only after all cards
+            are restored successfully.
 
     Returns:
         None: The matching cards are restored for their side effects.
@@ -459,54 +477,11 @@ def unsuspend_all_addon_cards(
         if excluded_card_ids is None or card_id not in excluded_card_ids
     ]
 
-    if not card_ids_to_unsuspend:
-        if on_complete is not None:
-            on_complete()
-        return
-
-    if pause_ms is None or len(card_ids_to_unsuspend) <= DECK_UNSUSPEND_BATCH_SIZE:
-        for start_index in range(0, len(card_ids_to_unsuspend), DECK_UNSUSPEND_BATCH_SIZE):
-            chunk = card_ids_to_unsuspend[
-                start_index : start_index + DECK_UNSUSPEND_BATCH_SIZE
-            ]
-            _restore_chunk(col, chunk, excluded_card_ids)
-
-        if on_complete is not None:
-            on_complete()
-        return
-
-    total_count = len(card_ids_to_unsuspend)
-    displayed_count = 0
-
-    def _finish_unsuspending() -> None:
-        if on_complete is not None:
-            on_complete()
-
-    def _process_chunk(start_index: int = 0) -> None:
-        nonlocal displayed_count
-        try:
-            chunk_size = _get_variable_chunk_size(DECK_UNSUSPEND_BATCH_SIZE)
-            chunk = card_ids_to_unsuspend[start_index : start_index + chunk_size]
-            if not chunk:
-                _finish_unsuspending()
-                return
-
-            _restore_chunk(col, chunk, excluded_card_ids)
-
-            displayed_count = min(total_count, displayed_count + len(chunk))
-
-            next_index = start_index + len(chunk)
-            if next_index >= total_count:
-                _finish_unsuspending()
-                return
-
-            cast(Any, QTimer).singleShot(
-                pause_ms,
-                lambda next_start_index=next_index: _process_chunk(next_start_index),
-            )
-        except Exception:
-            if on_complete is not None:
-                on_complete()
-            raise
-
-    cast(Any, QTimer).singleShot(0, _process_chunk)
+    run_chunked(
+        card_ids_to_unsuspend,
+        lambda chunk: _restore_chunk(col, chunk, excluded_card_ids),
+        batch_size=DECK_UNSUSPEND_BATCH_SIZE,
+        pause_ms=0 if pause_ms is None else pause_ms,
+        on_complete=on_complete,
+        on_success=on_success,
+    )

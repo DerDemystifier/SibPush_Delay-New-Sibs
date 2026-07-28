@@ -349,6 +349,52 @@ def test_direct_legacy_ignore_clear_preserves_new_marker_and_third_party_data() 
         assert malformed_card.custom_data == "not-json"
 
 
+def test_async_clear_all_ignored_markers_processes_every_candidate_in_chunks() -> None:
+    """Collection-wide ignored-marker cleanup must yield and still clear every candidate."""
+
+    with temporary_collection() as col:
+        model = build_test_notetype(col, card_count=1)
+        deck_id = col.decks.id("Async ignored marker cleanup")
+        notes_and_cards = [
+            add_note_with_siblings(col, model, deck_id, f"ignored {index}", expected_card_count=1)
+            for index in range(3)
+        ]
+
+        with patched_addon_state(col) as addon:
+            suspension = import_module(f"{addon.__name__}.sibpush.processing.suspension")
+            state = import_module(f"{addon.__name__}.sibpush.state")
+            ignored_cards = [cards[0] for _, cards in notes_and_cards]
+            for card in ignored_cards:
+                set_card_custom_data(col, card, {state.SIBPUSH_IGNORED_KEY: True})
+
+            scheduled: list[object] = []
+
+            def fake_single_shot(_delay_ms: int, callback: object) -> None:
+                scheduled.append(callback)
+
+            original_batch_size = suspension.DECK_UNSUSPEND_BATCH_SIZE
+            suspension.DECK_UNSUSPEND_BATCH_SIZE = 1
+            try:
+                with patch.object(
+                    suspension.QTimer, "singleShot", side_effect=fake_single_shot
+                ):
+                    completed: list[str] = []
+                    suspension.clear_all_addon_ignored_markers(
+                        col, on_complete=lambda: completed.append("complete")
+                    )
+
+                    assert len(scheduled) == 1
+                    while scheduled:
+                        scheduled.pop(0)()
+
+                assert completed == ["complete"]
+            finally:
+                suspension.DECK_UNSUSPEND_BATCH_SIZE = original_batch_size
+
+        for card in ignored_cards:
+            assert_card_is_not_ignored(col, card)
+
+
 def test_normal_promotion_removes_suspension_provenance() -> None:
     """Normal SibPush promotion clears provenance after its own unsuspend succeeds."""
 
@@ -467,6 +513,7 @@ if __name__ == "__main__":
     test_scheduler_failure_does_not_infer_suspension_provenance()
     test_scheduler_failure_preserves_restoration_provenance_after_partial_success()
     test_direct_legacy_ignore_clear_preserves_new_marker_and_third_party_data()
+    test_async_clear_all_ignored_markers_processes_every_candidate_in_chunks()
     test_normal_promotion_removes_suspension_provenance()
     test_async_deck_cleanup_stops_when_deck_is_unignored_between_chunks()
     test_async_deck_cleanup_skips_cards_moved_before_their_chunk()

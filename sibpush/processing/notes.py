@@ -3,15 +3,12 @@
 from __future__ import annotations
 
 import time
-import random
 from collections.abc import Callable, Sequence
 from datetime import date
-from typing import Any, cast
 
 from anki.cards import CARD_TYPE_NEW, QUEUE_TYPE_SIBLING_BURIED, QUEUE_TYPE_SUSPENDED, Card
 from anki.collection import Collection
 from anki.notes import NoteId
-from aqt.qt import QTimer
 from aqt.utils import tooltip
 
 from ..cards.classification import classify_cards
@@ -27,6 +24,7 @@ from .query import (
     get_modified_note_ids_since,
     should_run_unmanaged_notes,
 )
+from .chunked_runner import run_chunked
 from .suspension import (
     card_is_ignored,
     note_is_ignored_deck,
@@ -38,15 +36,6 @@ MODIFIED_NOTE_BATCH_SIZE = 1000
 MODIFIED_NOTE_BATCH_PAUSE_MS = 100
 MODIFIED_NOTE_TOOLTIP_PERIOD_MS = 3000
 PROCESSING_FINISHED_TOOLTIP_PERIOD_MS = 2000
-
-
-def _get_variable_chunk_size(batch_size: int) -> int:
-    """Return a slightly randomized chunk size around the provided batch size."""
-
-    jitter = max(1, round(batch_size * 0.1))
-    lower_bound = max(1, batch_size - jitter)
-    upper_bound = batch_size + jitter
-    return random.randint(lower_bound, upper_bound)
 
 
 def process_note(
@@ -262,72 +251,11 @@ def show_processing_finished_tooltip() -> None:
     )
 
 
-def _run_modified_note_chunked_scan(
+def process_all_notes(
     col: Collection,
-    modified_note_ids: Sequence[NoteId],
-    scan_started_at: int,
     on_complete: Callable[[], None] | None = None,
     on_success: Callable[[], None] | None = None,
 ) -> None:
-    """Process modified note ids in chunks and pause briefly between batches.
-
-    The scan is intentionally chunked so large browser refreshes keep the UI responsive. The
-    watermark is persisted only after the entire scan completes, so a partial run does not skip
-    any remaining modified notes on the next browser refresh.
-    """
-
-    note_ids = list(modified_note_ids)
-    if not note_ids:
-        _persist_processed_mod_timestamp(col, scan_started_at)
-        if on_complete is not None:
-            on_complete()
-        return
-
-    total_count = len(note_ids)
-    displayed_count = 0
-
-    def _finish_scan() -> None:
-        _show_modified_note_progress(total_count, total_count)
-        _persist_processed_mod_timestamp(col, scan_started_at)
-        show_processing_finished_tooltip()
-        try:
-            if on_success is not None:
-                on_success()
-        finally:
-            if on_complete is not None:
-                on_complete()
-
-    def _process_chunk(start_index: int = 0) -> None:
-        nonlocal displayed_count
-        try:
-            chunk_size = _get_variable_chunk_size(MODIFIED_NOTE_BATCH_SIZE)
-            chunk = note_ids[start_index : start_index + chunk_size]
-            if not chunk:
-                _finish_scan()
-                return
-
-            _process_note_batch(col, chunk)
-            displayed_count = min(total_count, displayed_count + len(chunk))
-            _show_modified_note_progress(displayed_count, total_count)
-
-            next_index = start_index + len(chunk)
-            if next_index >= len(note_ids):
-                _finish_scan()
-                return
-
-            cast(Any, QTimer).singleShot(
-                MODIFIED_NOTE_BATCH_PAUSE_MS,
-                lambda next_start_index=next_index: _process_chunk(next_start_index),
-            )
-        except Exception:
-            if on_complete is not None:
-                on_complete()
-            raise
-
-    cast(Any, QTimer).singleShot(0, _process_chunk)
-
-
-def process_all_notes(col: Collection) -> None:
     """Process every eligible new note in the collection.
 
     Args:
@@ -340,8 +268,19 @@ def process_all_notes(col: Collection) -> None:
     current_full_scan_date = date.today().isoformat()
     new_note_ids = get_new_note_ids(col)
 
-    _process_note_batch(col, new_note_ids)
-    sync_last_full_scan_date(current_full_scan_date)
+    def _finish_success() -> None:
+        sync_last_full_scan_date(current_full_scan_date)
+        if on_success is not None:
+            on_success()
+
+    run_chunked(
+        new_note_ids,
+        lambda chunk: _process_note_batch(col, chunk),
+        batch_size=MODIFIED_NOTE_BATCH_SIZE,
+        pause_ms=MODIFIED_NOTE_BATCH_PAUSE_MS,
+        on_complete=on_complete,
+        on_success=_finish_success,
+    )
 
 
 def process_modified_notes(
@@ -371,11 +310,7 @@ def process_modified_notes(
     current_scan_timestamp = int(time.time())
     modified_note_ids = get_modified_note_ids_since(col, modified_since)
 
-    if modified_note_ids and len(modified_note_ids) <= MODIFIED_NOTE_BATCH_SIZE:
-        if modified_note_ids:
-            # Avoid calling _process_note_batch with an empty list
-            _process_note_batch(col, modified_note_ids)
-
+    if not modified_note_ids:
         _persist_processed_mod_timestamp(col, current_scan_timestamp)
         try:
             if on_success is not None:
@@ -385,16 +320,28 @@ def process_modified_notes(
                 on_complete()
         return
 
-    _run_modified_note_chunked_scan(
-        col,
+    def _finish_success() -> None:
+        _persist_processed_mod_timestamp(col, current_scan_timestamp)
+        show_processing_finished_tooltip()
+        if on_success is not None:
+            on_success()
+
+    run_chunked(
         modified_note_ids,
-        current_scan_timestamp,
-        on_complete,
-        on_success,
+        lambda chunk: _process_note_batch(col, chunk),
+        batch_size=MODIFIED_NOTE_BATCH_SIZE,
+        pause_ms=MODIFIED_NOTE_BATCH_PAUSE_MS,
+        on_progress=_show_modified_note_progress,
+        on_complete=on_complete,
+        on_success=_finish_success,
     )
 
 
-def process_new_unmanaged_notes(col: Collection) -> None:
+def process_new_unmanaged_notes(
+    col: Collection,
+    on_complete: Callable[[], None] | None = None,
+    on_success: Callable[[], None] | None = None,
+) -> None:
     """Process only unmanaged new notes in the collection.
 
     This is the lighter recurring scan used after the initial startup/day-change full pass.
@@ -409,7 +356,20 @@ def process_new_unmanaged_notes(col: Collection) -> None:
 
     should_run, current_unmanaged_note_ids = should_run_unmanaged_notes(col)
     if not should_run:
+        if on_complete is not None:
+            on_complete()
         return
 
-    _process_note_batch(col, current_unmanaged_note_ids)
-    sync_last_unmanaged_note_ids(current_unmanaged_note_ids)
+    def _finish_success() -> None:
+        sync_last_unmanaged_note_ids(current_unmanaged_note_ids)
+        if on_success is not None:
+            on_success()
+
+    run_chunked(
+        current_unmanaged_note_ids,
+        lambda chunk: _process_note_batch(col, chunk),
+        batch_size=MODIFIED_NOTE_BATCH_SIZE,
+        pause_ms=MODIFIED_NOTE_BATCH_PAUSE_MS,
+        on_complete=on_complete,
+        on_success=_finish_success,
+    )
