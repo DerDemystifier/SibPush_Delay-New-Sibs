@@ -163,6 +163,46 @@ def test_legacy_ignore_migration_preserves_third_party_data_and_is_idempotent() 
             assert malformed_card.custom_data == "not-json"
 
 
+def test_legacy_suspension_tag_migration_marks_only_currently_suspended_cards() -> None:
+    """Legacy suspension tags become provenance only for cards still suspended at migration."""
+
+    with temporary_collection() as col:
+        model = build_test_notetype(col)
+        deck_id = make_test_deck_id(col)
+        note, cards = add_note_with_siblings(col, model, deck_id, "legacy suspension migration")
+
+        with patched_addon_state(col) as addon:
+            migration = import_module(f"{addon.__name__}.sibpush.migration")
+            state = import_module(f"{addon.__name__}.sibpush.state")
+            suspension = import_module(f"{addon.__name__}.sibpush.processing.suspension")
+            note.add_tag(migration.LEGACY_SUSPENDED_TAG)
+            col.update_note(note)
+            col.sched.suspend_cards([cards[0].id, cards[1].id])
+            col.sched.unsuspend_cards([cards[1].id])
+
+            migration.migrate_legacy_suspension_tag(col)
+
+            assert not col.get_note(note.id).has_tag(migration.LEGACY_SUSPENDED_TAG)
+            assert_card_is_suspended_by_addon(col, cards[0])
+            assert_card_is_not_suspended_by_addon(col, cards[1])
+            assert_card_is_not_suspended_by_addon(col, cards[2])
+
+            migration.migrate_legacy_suspension_tag(col)
+            assert_card_is_suspended_by_addon(col, cards[0])
+
+            addon.custom_deck_rules_by_did[str(deck_id)] = {
+                "did": str(deck_id),
+                "name": "legacy suspension migration",
+                state.CONFIG_IGNORED_KEY: True,
+                "interval": 30,
+            }
+            with patch.object(suspension, "tooltip"):
+                suspension.unsuspend_all_addon_cards_in_deck(col, str(deck_id))
+
+            assert col.get_card(cards[0].id).queue == QUEUE_TYPE_NEW
+            assert_card_is_not_suspended_by_addon(col, cards[0])
+
+
 def test_one_ignored_sibling_does_not_hide_other_eligible_siblings() -> None:
     with temporary_collection() as col:
         model = build_test_notetype(col)
