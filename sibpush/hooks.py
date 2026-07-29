@@ -41,7 +41,6 @@ from .processing.notes import (
     process_modified_notes,
     process_new_unmanaged_notes,
     process_note,
-    show_processing_finished_tooltip,
 )
 from .state import (
     consume_pending_browser_work,
@@ -80,11 +79,6 @@ def _addon_module_name() -> str:
 
     package_name = __package__ or __name__
     return package_name.split(".", 1)[0]
-
-
-# Keep the tooltip helper imported for tests and for parity with the processing module's
-# completion path, even though this module does not invoke it directly.
-_ = show_processing_finished_tooltip
 
 
 def _apply_pending_browser_work_before_scan(
