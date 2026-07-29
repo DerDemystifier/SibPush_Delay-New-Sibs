@@ -46,7 +46,7 @@ def test_browser_render_uses_the_older_timestamp_watermark() -> None:
 
             with patch.object(hooks_module.QTimer, "singleShot", side_effect=fake_single_shot), patch.object(
                 hooks_module, "process_modified_notes", side_effect=fake_process_modified_notes
-            ), patch.object(hooks_module, "show_processing_finished_tooltip"):
+            ):
                 hooks_module.browser_render(browser)
 
                 assert callable(scheduled["callback"])
@@ -118,7 +118,7 @@ def test_browser_render_applies_queued_browser_work_before_scanning() -> None:
                 hooks_module, "process_modified_notes", side_effect=fake_process_modified_notes
             ), patch.object(
                 hooks_module, "process_new_unmanaged_notes", side_effect=fake_process_new_unmanaged_notes
-            ), patch.object(hooks_module, "show_processing_finished_tooltip"):
+            ):
                 hooks_module.browser_render(browser)
 
                 assert callable(scheduled["callback"])
@@ -179,7 +179,7 @@ def test_browser_render_runs_unmanaged_refresh_after_partial_scan() -> None:
                 hooks_module, "process_modified_notes", side_effect=fake_process_modified_notes
             ), patch.object(
                 hooks_module, "process_new_unmanaged_notes", side_effect=fake_process_new_unmanaged_notes
-            ), patch.object(hooks_module, "show_processing_finished_tooltip"):
+            ):
                 hooks_module.browser_render(browser)
 
                 assert callable(scheduled["callback"])
@@ -232,7 +232,7 @@ def test_browser_render_clears_stale_sync_watermark_after_scan() -> None:
 
             with patch.object(hooks_module.QTimer, "singleShot", side_effect=fake_single_shot), patch.object(
                 hooks_module, "process_modified_notes", side_effect=fake_process_modified_notes
-            ), patch.object(hooks_module, "show_processing_finished_tooltip"):
+            ):
                 hooks_module.browser_render(browser)
 
                 assert callable(scheduled["callback"])
@@ -288,7 +288,7 @@ def test_browser_render_skips_the_immediate_followup_render_after_scan() -> None
 
             with patch.object(hooks_module.QTimer, "singleShot", side_effect=fake_single_shot), patch.object(
                 hooks_module, "process_modified_notes", side_effect=fake_process_modified_notes
-            ), patch.object(hooks_module, "show_processing_finished_tooltip"):
+            ):
                 hooks_module.browser_render(browser)
 
                 assert events == ["schedule-scan", "schedule-callback"]

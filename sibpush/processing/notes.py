@@ -35,7 +35,6 @@ from .suspension import (
 MODIFIED_NOTE_BATCH_SIZE = 1000
 MODIFIED_NOTE_BATCH_PAUSE_MS = 100
 MODIFIED_NOTE_TOOLTIP_PERIOD_MS = 3000
-PROCESSING_FINISHED_TOOLTIP_PERIOD_MS = 2000
 
 
 def process_note(
@@ -242,15 +241,6 @@ def _show_modified_note_progress(processed_count: int, total_count: int) -> None
     )
 
 
-def show_processing_finished_tooltip() -> None:
-    """Show a short tooltip when the browser batch has finished."""
-
-    tooltip(
-        "SibPush has finished processing",
-        period=PROCESSING_FINISHED_TOOLTIP_PERIOD_MS,
-    )
-
-
 def process_all_notes(
     col: Collection,
     on_complete: Callable[[], None] | None = None,
@@ -322,7 +312,6 @@ def process_modified_notes(
 
     def _finish_success() -> None:
         _persist_processed_mod_timestamp(col, current_scan_timestamp)
-        show_processing_finished_tooltip()
         if on_success is not None:
             on_success()
 

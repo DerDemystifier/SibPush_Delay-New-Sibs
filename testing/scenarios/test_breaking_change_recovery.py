@@ -126,7 +126,7 @@ def test_browser_render_performs_recovery_when_version_is_missing() -> None:
                 hooks_module, "run_startup_migrations", side_effect=fake_run_startup_migrations
             ), patch.object(hooks_module.QTimer, "singleShot", side_effect=fake_single_shot), patch.object(
                 hooks_module, "process_modified_notes", side_effect=fake_process_modified_notes
-            ), patch.object(hooks_module, "show_processing_finished_tooltip"):
+            ):
                 hooks_module.browser_render(browser)
 
                 assert callable(scheduled["callback"])
@@ -231,7 +231,7 @@ def test_browser_render_reprocesses_legacy_suspension_tags_before_scan() -> None
 
             with patch.object(hooks_module.QTimer, "singleShot", side_effect=fake_single_shot), patch.object(
                 hooks_module, "process_modified_notes", side_effect=fake_process_modified_notes
-            ), patch.object(hooks_module, "show_processing_finished_tooltip"):
+            ):
                 hooks_module.browser_render(browser)
 
             assert "callback" in scheduled

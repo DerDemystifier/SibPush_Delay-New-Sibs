@@ -40,29 +40,27 @@ The configuration of SibPush is straightforward and can be tailored to meet your
 
 - `tag_rules`: A dictionary of tag-specific rules. Each key is a note tag name, and each rule uses `interval` to override the maturity threshold for notes with that tag. Tag rules take precedence over deck rules, but ignored decks still win.
 
-          Example:
-
-          ```json
-          {
-              "custom_deck_rules": [
-                  {
-                      "did": "1777739665453",
-                      "name": "Country Capitals",
-                      "ignored": false,
-                      "interval": 18
-                  }
-              ],
-              "tag_rules": {
-                  "easy_topic": {
-                      "interval": 0
-                  }
-              }
-          }
-          ```
-
 - `debug`: Set to `true` if you are debugging. When `debug` is true, the addon will log more information to `log.txt` file, which can be helpful for troubleshooting.
 
----
+    Example:
+
+    ```json
+    {
+        "custom_deck_rules": [
+            {
+                "did": "1777739665453",
+                "name": "Country Capitals",
+                "ignored": false,
+                "interval": 18
+            }
+        ],
+        "tag_rules": {
+            "easy_topic": {
+                "interval": 0
+            }
+        }
+    }
+    ```
 
 ### Ignoring a deck
 
@@ -78,8 +76,6 @@ add-on is deleted, the same provenance-aware cleanup is used; individually ignor
 untouched during restoration, even if their ignored marker is later cleared in the confirmation
 dialog.
 
-For troubleshooting, SibPush stores suspension provenance in the `sibpsusp` card custom-data
-marker and individual-card ignore state in the `sibpign` marker. These are the exact marker keys
-written by the add-on.
+---
 
 Happy studying!
