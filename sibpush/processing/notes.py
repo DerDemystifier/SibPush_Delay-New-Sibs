@@ -320,7 +320,11 @@ def process_modified_notes(
         lambda chunk: _process_note_batch(col, chunk),
         batch_size=MODIFIED_NOTE_BATCH_SIZE,
         pause_ms=MODIFIED_NOTE_BATCH_PAUSE_MS,
-        on_progress=_show_modified_note_progress,
+        on_progress=(
+            _show_modified_note_progress
+            if len(modified_note_ids) > MODIFIED_NOTE_BATCH_SIZE
+            else None
+        ),
         on_complete=on_complete,
         on_success=_finish_success,
     )

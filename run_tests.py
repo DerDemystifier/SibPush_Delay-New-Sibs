@@ -48,6 +48,7 @@ from testing.scenarios.test_timestamp_based_browser_scan import (
     test_browser_render_runs_unmanaged_refresh_after_partial_scan,
     test_browser_render_clears_stale_sync_watermark_after_scan,
     test_process_modified_notes_persists_the_processed_watermark,
+    test_process_modified_notes_only_reports_progress_for_more_than_one_batch,
     test_sync_did_finish_persists_the_sync_watermark,
 )
 from testing.scenarios.test_process_a_single_note_without_touching_other_notes import (
@@ -138,6 +139,7 @@ tests = {
     "test_browser_render_runs_unmanaged_refresh_after_partial_scan": test_browser_render_runs_unmanaged_refresh_after_partial_scan,
     "test_browser_render_clears_stale_sync_watermark_after_scan": test_browser_render_clears_stale_sync_watermark_after_scan,
     "test_process_modified_notes_persists_the_processed_watermark": test_process_modified_notes_persists_the_processed_watermark,
+    "test_process_modified_notes_only_reports_progress_for_more_than_one_batch": test_process_modified_notes_only_reports_progress_for_more_than_one_batch,
     "test_sync_did_finish_persists_the_sync_watermark": test_sync_did_finish_persists_the_sync_watermark,
     "test_custom_deck_interval_overrides_default_interval": test_custom_deck_interval_overrides_default_interval,
     "test_update_custom_deck_rule_unsuspends_cards_when_deck_becomes_ignored": test_update_custom_deck_rule_unsuspends_cards_when_deck_becomes_ignored,
