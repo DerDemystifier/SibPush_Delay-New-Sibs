@@ -338,6 +338,29 @@ def test_process_modified_notes_persists_the_processed_watermark() -> None:
             }
 
 
+def test_process_modified_notes_only_reports_progress_for_more_than_one_batch() -> None:
+    """Modified-note progress should stay hidden for scans up to one 1,000-note batch."""
+
+    with temporary_collection() as col:
+        with patched_addon_state(col) as patched_addon:
+            addon = patched_addon
+            notes_module = import_module(f"{addon.__name__}.sibpush.processing.notes")
+
+            for note_count, expected_callback in (
+                (1000, None),
+                (1001, notes_module._show_modified_note_progress),
+            ):
+                with patch.object(
+                    notes_module,
+                    "get_modified_note_ids_since",
+                    return_value=list(range(note_count)),
+                ), patch.object(notes_module, "run_chunked") as run_chunked:
+                    notes_module.process_modified_notes(col, 99)
+
+                assert run_chunked.call_args is not None
+                assert run_chunked.call_args.kwargs["on_progress"] is expected_callback
+
+
 def test_sync_did_finish_persists_the_sync_watermark() -> None:
     """Sync completion should persist the sync watermark for later browser scans."""
 
