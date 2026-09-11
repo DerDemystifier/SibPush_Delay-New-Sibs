@@ -104,6 +104,7 @@ from testing.scenarios.test_breaking_change_recovery import (
 from testing.scenarios.test_chunked_runner import (
     test_run_chunked_yields_between_batches_and_reports_progress,
     test_run_chunked_calls_completion_when_processing_fails,
+    test_run_chunked_stops_cleanly_when_collection_closes,
     test_run_chunked_stops_before_a_stale_next_batch,
     test_run_chunked_completes_empty_work_as_success,
 )
@@ -153,6 +154,7 @@ tests = {
     "test_collection_did_load_skips_recovery_when_future_version_is_stored": test_collection_did_load_skips_recovery_when_future_version_is_stored,
     "test_run_chunked_yields_between_batches_and_reports_progress": test_run_chunked_yields_between_batches_and_reports_progress,
     "test_run_chunked_calls_completion_when_processing_fails": test_run_chunked_calls_completion_when_processing_fails,
+    "test_run_chunked_stops_cleanly_when_collection_closes": test_run_chunked_stops_cleanly_when_collection_closes,
     "test_run_chunked_stops_before_a_stale_next_batch": test_run_chunked_stops_before_a_stale_next_batch,
     "test_run_chunked_completes_empty_work_as_success": test_run_chunked_completes_empty_work_as_success,
     "test_suspended_immature_review_card_does_not_block_new_siblings": test_suspended_immature_review_card_does_not_block_new_siblings,
