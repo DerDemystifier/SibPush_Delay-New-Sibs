@@ -12,9 +12,11 @@ import random
 from collections.abc import Callable, Sequence
 from typing import Any, TypeVar, cast
 
+from anki.errors import InvalidInput
 from aqt.qt import QTimer
 
 T = TypeVar("T")
+_COLLECTION_NOT_OPEN_ERROR = "CollectionNotOpen"
 
 
 def _get_chunk_size(batch_size: int, jitter: bool) -> int:
@@ -52,8 +54,10 @@ def run_chunked(
     false stops cleanly, invokes ``on_complete``, and does not invoke ``on_success``.
 
     ``on_complete`` is invoked exactly once for all terminal outcomes, including an exception
-    from ``process_chunk``, ``on_progress``, ``should_continue``, or ``on_success``. Exceptions
-    are not swallowed; after cleanup they propagate to the caller/event loop.
+    from ``process_chunk``, ``on_progress``, ``should_continue``, or ``on_success``. The Anki
+    ``InvalidInput: CollectionNotOpen`` sentinel is treated as cancellation because a profile
+    switch can close the collection while a queued batch is waiting for the event loop. Other
+    exceptions are not swallowed; after cleanup they propagate to the caller/event loop.
 
     Args:
         items: Stable input sequence to process. It is copied before work begins.
@@ -71,7 +75,8 @@ def run_chunked(
 
     Raises:
         ValueError: If ``batch_size`` is not positive or ``pause_ms`` is negative.
-        Exception: Any exception raised by processing or a callback, after completion cleanup.
+        Exception: Any exception raised by processing or a callback other than
+            ``InvalidInput: CollectionNotOpen``, after completion cleanup.
     """
 
     if batch_size <= 0:
@@ -129,6 +134,11 @@ def run_chunked(
                 pause_ms,
                 lambda next_start_index=next_index: _process_next(next_start_index),
             )
+        except InvalidInput as error:
+            _finish(False)
+            if str(error) == _COLLECTION_NOT_OPEN_ERROR:
+                return
+            raise
         except Exception:
             _finish(False)
             raise

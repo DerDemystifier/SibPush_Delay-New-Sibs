@@ -3,6 +3,8 @@ from __future__ import annotations
 from importlib import import_module
 from unittest.mock import patch
 
+from anki.errors import InvalidInput
+
 from ..addon_utils import patched_addon_state
 from ..collection_utils import temporary_collection
 
@@ -73,6 +75,38 @@ def test_run_chunked_calls_completion_when_processing_fails() -> None:
                 assert str(error) == "batch failed"
             else:
                 raise AssertionError("expected the batch failure")
+
+            assert events == ["complete"]
+
+
+def test_run_chunked_stops_cleanly_when_collection_closes() -> None:
+    """A profile switch must cancel queued work without surfacing CollectionNotOpen."""
+
+    with temporary_collection() as col:
+        with patched_addon_state(col) as addon:
+            runner = import_module(f"{addon.__name__}.sibpush.processing.chunked_runner")
+            scheduled: list[object] = []
+            events: list[str] = []
+
+            def fake_single_shot(_delay_ms: int, callback: object) -> None:
+                scheduled.append(callback)
+
+            def process_chunk(chunk: object) -> None:
+                if list(chunk) == [3, 4]:  # type: ignore[arg-type]
+                    raise InvalidInput("CollectionNotOpen", None, None, None)
+
+            with patch.object(runner.QTimer, "singleShot", side_effect=fake_single_shot):
+                runner.run_chunked(
+                    [1, 2, 3, 4],
+                    process_chunk,
+                    batch_size=2,
+                    jitter=False,
+                    on_complete=lambda: events.append("complete"),
+                    on_success=lambda: events.append("success"),
+                )
+
+                assert len(scheduled) == 1
+                scheduled.pop(0)()  # type: ignore[operator]
 
             assert events == ["complete"]
 
