@@ -31,6 +31,7 @@ from .suspension import (
     suspend_cards,
     unsuspend_cards,
 )
+from .undo import merge_into_top_undo_entry
 
 MODIFIED_NOTE_BATCH_SIZE = 1000
 MODIFIED_NOTE_BATCH_PAUSE_MS = 100
@@ -220,9 +221,14 @@ def _process_note_batch(col: Collection, note_ids: Sequence[NoteId]) -> None:
     # Returns: {note_id: [card1, card2, ...], ...}
     all_siblings_by_nid = get_all_child_cards_batch(col, note_ids)
 
-    # Process each note with its prefetched siblings
-    for note_id in note_ids:
-        process_note(col, note_id, prefetched_siblings=all_siblings_by_nid.get(note_id))
+    # Later QTimer chunks may follow user actions, so capture the current target for this chunk.
+    with merge_into_top_undo_entry(col):
+        for note_id in note_ids:
+            process_note(
+                col,
+                note_id,
+                prefetched_siblings=all_siblings_by_nid.get(note_id),
+            )
 
 
 def _persist_processed_mod_timestamp(col: Collection, scan_started_at: int) -> None:

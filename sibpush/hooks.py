@@ -42,6 +42,7 @@ from .processing.notes import (
     process_new_unmanaged_notes,
     process_note,
 )
+from .processing.undo import merge_into_top_undo_entry
 from .state import (
     consume_pending_browser_work,
     clear_stale_sync_mod_ts,
@@ -264,7 +265,8 @@ def reviewer_did_answer_card(reviewer: Any, card: Card, _: int) -> None:
     if not reviewer or not reviewer.mw or not reviewer.mw.col:
         raise Exception("SibPush : Anki is not initialized properly")
 
-    process_note(reviewer.mw.col, card.nid, coming_from_reviewer_hook=True)
+    with merge_into_top_undo_entry(reviewer.mw.col):
+        process_note(reviewer.mw.col, card.nid, coming_from_reviewer_hook=True)
 
 
 def sync_did_finish(*_: Any) -> None:

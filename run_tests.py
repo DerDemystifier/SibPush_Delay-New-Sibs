@@ -5,6 +5,22 @@ import traceback
 from testing.scenarios.test_bury_next_sibling_for_non_ignored_four_card_notes import (
     test_reviewer_hook_buries_the_next_sibling_for_non_ignored_four_card_notes,
 )
+from testing.scenarios.test_reviewer_undo_grouping import (
+    test_reviewer_hook_does_not_merge_when_undo_state_is_unchanged,
+    test_reviewer_hook_does_not_merge_without_a_prior_undo_entry,
+    test_reviewer_hook_continues_when_initial_undo_status_read_fails,
+    test_reviewer_hook_logs_merge_failure_without_breaking_review,
+    test_reviewer_hook_merges_new_undo_entries_once,
+    test_reviewer_hook_preserves_processing_error_when_merge_fails,
+    test_single_undo_restores_answer_and_reviewer_sibpush_changes,
+)
+from testing.scenarios.test_sibpush_undo_batches import (
+    test_clear_ignored_marker_chunk_groups_card_updates,
+    test_noop_note_batch_does_not_create_an_undo_entry,
+    test_note_batch_merges_changes_into_current_undo_entry,
+    test_note_batch_scan_merges_into_answer_card_on_real_collection,
+    test_restore_chunk_groups_unsuspend_and_marker_changes,
+)
 from testing.scenarios.test_custom_deck_interval_overrides_default_interval import (
     test_custom_deck_interval_overrides_default_interval,
 )
@@ -12,12 +28,14 @@ from testing.scenarios.test_deck_actions_save_and_refresh import (
     test_update_custom_deck_rule_unsuspends_cards_when_deck_becomes_ignored,
 )
 from testing.scenarios.test_addon_delete_unsuspends_all_cards import (
+    test_on_addon_delete_clears_ignored_markers_without_restoring_them,
     test_on_addon_delete_restores_only_owned_new_cards_before_deletion,
 )
 from testing.scenarios.test_deck_browser_menu_actions import (
     test_deck_browser_submenu_toggles_ignore_and_sets_interval,
 )
 from testing.scenarios.test_card_browser_menu_actions import (
+    test_card_browser_ignore_toggle_round_trip,
     test_card_browser_ignore_toggle_preserves_manual_suspension,
 )
 from testing.scenarios.test_ignore_custom_deck_rule_by_deck_id import (
@@ -128,6 +146,18 @@ tests = {
     "test_manual_unsuspend_of_non_ignored_new_card_is_reprocessed_and_suspended_again": test_manual_unsuspend_of_non_ignored_new_card_is_reprocessed_and_suspended_again,
     "test_process_all_notes_resuspends_later_new_sibling_after_manual_unsuspend": test_process_all_notes_resuspends_later_new_sibling_after_manual_unsuspend,
     "test_reviewer_hook_buries_the_next_sibling_for_non_ignored_four_card_notes": test_reviewer_hook_buries_the_next_sibling_for_non_ignored_four_card_notes,
+    "test_reviewer_hook_merges_new_undo_entries_once": test_reviewer_hook_merges_new_undo_entries_once,
+    "test_reviewer_hook_does_not_merge_when_undo_state_is_unchanged": test_reviewer_hook_does_not_merge_when_undo_state_is_unchanged,
+    "test_reviewer_hook_does_not_merge_without_a_prior_undo_entry": test_reviewer_hook_does_not_merge_without_a_prior_undo_entry,
+    "test_reviewer_hook_continues_when_initial_undo_status_read_fails": test_reviewer_hook_continues_when_initial_undo_status_read_fails,
+    "test_reviewer_hook_logs_merge_failure_without_breaking_review": test_reviewer_hook_logs_merge_failure_without_breaking_review,
+    "test_reviewer_hook_preserves_processing_error_when_merge_fails": test_reviewer_hook_preserves_processing_error_when_merge_fails,
+    "test_single_undo_restores_answer_and_reviewer_sibpush_changes": test_single_undo_restores_answer_and_reviewer_sibpush_changes,
+    "test_note_batch_merges_changes_into_current_undo_entry": test_note_batch_merges_changes_into_current_undo_entry,
+    "test_note_batch_scan_merges_into_answer_card_on_real_collection": test_note_batch_scan_merges_into_answer_card_on_real_collection,
+    "test_noop_note_batch_does_not_create_an_undo_entry": test_noop_note_batch_does_not_create_an_undo_entry,
+    "test_restore_chunk_groups_unsuspend_and_marker_changes": test_restore_chunk_groups_unsuspend_and_marker_changes,
+    "test_clear_ignored_marker_chunk_groups_card_updates": test_clear_ignored_marker_chunk_groups_card_updates,
     "test_keeps_one_new_card_available_for_a_fresh_three_card_note": test_keeps_one_new_card_available_for_a_fresh_three_card_note,
     "test_ignores_custom_deck_rule_by_deck_id": test_ignores_custom_deck_rule_by_deck_id,
     "test_migrates_legacy_config_into_custom_deck_rules": test_migrates_legacy_config_into_custom_deck_rules,
@@ -144,7 +174,9 @@ tests = {
     "test_custom_deck_interval_overrides_default_interval": test_custom_deck_interval_overrides_default_interval,
     "test_update_custom_deck_rule_unsuspends_cards_when_deck_becomes_ignored": test_update_custom_deck_rule_unsuspends_cards_when_deck_becomes_ignored,
     "test_on_addon_delete_restores_only_owned_new_cards_before_deletion": test_on_addon_delete_restores_only_owned_new_cards_before_deletion,
+    "test_on_addon_delete_clears_ignored_markers_without_restoring_them": test_on_addon_delete_clears_ignored_markers_without_restoring_them,
     "test_deck_browser_submenu_toggles_ignore_and_sets_interval": test_deck_browser_submenu_toggles_ignore_and_sets_interval,
+    "test_card_browser_ignore_toggle_round_trip": test_card_browser_ignore_toggle_round_trip,
     "test_card_browser_ignore_toggle_preserves_manual_suspension": test_card_browser_ignore_toggle_preserves_manual_suspension,
     "test_tag_rule_takes_precedence_over_custom_deck_interval": test_tag_rule_takes_precedence_over_custom_deck_interval,
     "test_ignored_deck_skips_matching_tag_rule": test_ignored_deck_skips_matching_tag_rule,

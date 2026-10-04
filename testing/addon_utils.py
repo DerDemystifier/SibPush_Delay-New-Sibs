@@ -7,7 +7,7 @@ from __future__ import annotations
 import importlib
 import importlib.util
 import sys
-from collections.abc import Generator, Sequence
+from collections.abc import Callable, Generator, Sequence
 from contextlib import contextmanager
 from copy import deepcopy
 from pathlib import Path
@@ -15,6 +15,7 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
+    from anki.cards import Card
     from anki.collection import Collection
     from anki.notes import NoteId
 
@@ -26,6 +27,7 @@ TEST_INTERVAL = 30
 class AddonModule(Protocol):
     """Type protocol representing the test-facing addon facade."""
 
+    __name__: str
     mw: Any
     last_full_scan_date: str | None
     last_unmanaged_note_ids: Sequence["NoteId"] | None
@@ -40,7 +42,13 @@ class AddonModule(Protocol):
 
     def process_new_unmanaged_notes(self, col: "Collection") -> None: ...
 
-    def process_note(self, col: "Collection", note_id: int, coming_from_reviewer_hook: bool = False) -> None: ...
+    def process_note(
+        self,
+        col: "Collection",
+        note_id: int,
+        coming_from_reviewer_hook: bool = False,
+        prefetched_siblings: Sequence["Card"] | None = None,
+    ) -> None: ...
 
     def get_state_file_path(self, col: "Collection" | None = None) -> Any: ...
 

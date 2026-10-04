@@ -92,6 +92,22 @@ def test_on_addon_delete_restores_only_owned_new_cards_before_deletion() -> None
             with patch.object(hooks_module, "askUser", return_value=False):
                 hooks_module.on_addon_delete(SimpleNamespace(), [addon.__name__])
 
+            assert col.undo_status().undo == "Restore SibPush cards"
+            col.undo()
+            assert_card_queues(
+                col,
+                cards_a,
+                [QUEUE_TYPE_REV, QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_SUSPENDED],
+            )
+            assert_card_queues(
+                col,
+                cards_b,
+                [QUEUE_TYPE_REV, QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_SUSPENDED],
+            )
+            assert_card_is_suspended_by_addon(col, cards_a[1])
+            assert_card_is_suspended_by_addon(col, cards_b[1])
+            col.redo()
+
         print_collection_state(col, "After addon deletion (cards restored immediately)")
 
         assert_card_queues(col, cards_a, [QUEUE_TYPE_REV, QUEUE_TYPE_NEW, QUEUE_TYPE_NEW])
@@ -157,6 +173,12 @@ def test_on_addon_delete_clears_ignored_markers_without_restoring_them() -> None
 
             with patch.object(hooks_module, "askUser", return_value=True):
                 hooks_module.on_addon_delete(SimpleNamespace(), [addon.__name__])
+
+            assert col.undo_status().undo == "Clear SibPush ignored markers"
+            col.undo()
+            assert_card_is_ignored(col, ignored_cards[2])
+            assert_card_is_ignored(col, ignored_review_cards[0])
+            col.redo()
 
         print_collection_state(col, "After addon deletion with confirmed clear")
 

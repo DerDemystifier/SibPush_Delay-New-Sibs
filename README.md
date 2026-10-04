@@ -19,6 +19,13 @@ Unlike other similar addons that only act when a note is reviewed in AnkiDesktop
 1. Install the addon at [Anki Addons](https://ankiweb.net/shared/info/1856111213) .
 2. That's it! Review your decks as usual, and SibPush will take care of the rest, ensuring that new cards are introduced at the right time.
 
+When SibPush adjusts sibling cards after a review, those changes are grouped with **Answer Card**
+in Anki's undo history.
+Automatic note scans merge each synchronous chunk into the undo entry that was on top when that
+chunk began, preserving its label. If no prior undo entry exists, Anki's scheduler operations
+remain separate entries. Explicit cleanup and card-browser ignore/unignore actions use named
+SibPush undo entries.
+
 ## Configuration
 
 The configuration of SibPush is straightforward and can be tailored to meet your study needs. Here are the settings you can tweak in the config file:

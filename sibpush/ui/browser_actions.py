@@ -8,6 +8,7 @@ from aqt.browser.browser import Browser
 from aqt.qt import QMenu
 
 from ..processing.suspension import card_is_ignored, clear_card_ignored, set_card_ignored
+from ..processing.undo import custom_undo_entry
 from ..state import get_mw
 
 
@@ -97,12 +98,14 @@ def add_browser_card_actions(browser: Browser, menu: QMenu) -> None:
     ignore_action.setChecked(all_ignored)
 
     def handle_ignore_toggle() -> None:
-        if all_ignored:
-            for card in cards:
-                clear_card_ignored(col, card)
-        else:
-            for card in cards:
-                set_card_ignored(col, card)
+        undo_name = "Unignore SibPush cards" if all_ignored else "Ignore SibPush cards"
+        with custom_undo_entry(col, undo_name) as start_undo_entry:
+            if all_ignored:
+                for card in cards:
+                    clear_card_ignored(col, card, before_update=start_undo_entry)
+            else:
+                for card in cards:
+                    set_card_ignored(col, card, before_update=start_undo_entry)
 
         save_collection = getattr(col, "save", None)
         if callable(save_collection):

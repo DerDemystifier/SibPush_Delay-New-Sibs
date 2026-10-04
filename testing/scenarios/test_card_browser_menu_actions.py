@@ -113,6 +113,16 @@ def test_card_browser_ignore_toggle_round_trip() -> None:
                 assert card_custom_data(col, card)[third_party_key] == f"card-{cards.index(card) + 1}"
                 assert card_custom_data(col, card)[state_module.ADDON_CUSTOM_DATA_KEY] == state_module.ADDON_CUSTOM_DATA_IGNORED_VALUE
 
+            assert col.undo_status().undo == "Ignore SibPush cards"
+            col.undo()
+            for card in cards:
+                assert_card_is_not_ignored(col, card)
+            assert col.undo_status().redo == "Ignore SibPush cards"
+
+            col.redo()
+            for card in cards:
+                assert_card_is_ignored(col, card)
+
             refreshed_menu = _FakeMenu("root")
             browser_actions.add_browser_card_actions(browser, refreshed_menu)
             refreshed_action = refreshed_menu.submenus[0].actions[0]
@@ -126,6 +136,14 @@ def test_card_browser_ignore_toggle_round_trip() -> None:
                 assert_card_is_not_ignored(col, card)
                 assert card_custom_data(col, card)[third_party_key] == f"card-{cards.index(card) + 1}"
                 assert state_module.ADDON_CUSTOM_DATA_KEY not in card_custom_data(col, card)
+            assert col.undo_status().undo == "Unignore SibPush cards"
+
+            col.undo()
+            for card in cards:
+                assert_card_is_ignored(col, card)
+            col.redo()
+            for card in cards:
+                assert_card_is_not_ignored(col, card)
 
 
 def test_card_browser_ignore_toggle_preserves_manual_suspension() -> None:

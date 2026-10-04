@@ -163,6 +163,16 @@ def test_unsuspend_all_addon_cards_in_deck_restores_only_owned_new_cards() -> No
             with patch.object(suspension_module, "tooltip"):
                 suspension_module.unsuspend_all_addon_cards_in_deck(col, str(deck_id))
 
+            assert col.undo_status().undo == "Restore SibPush cards"
+            col.undo()
+            assert_card_queues(
+                col, cards, [QUEUE_TYPE_REV, QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_SUSPENDED]
+            )
+            assert_card_is_suspended_by_addon(col, cards[1])
+            assert_card_is_suspended_by_addon(col, cards[2])
+
+            col.redo()
+
         assert_card_queues(col, cards, [QUEUE_TYPE_REV, QUEUE_TYPE_NEW, QUEUE_TYPE_NEW])
         assert_card_queues(col, manual_cards, [QUEUE_TYPE_NEW, QUEUE_TYPE_SUSPENDED, QUEUE_TYPE_NEW])
         assert_card_queues(col, single_card_cards, [QUEUE_TYPE_SUSPENDED])

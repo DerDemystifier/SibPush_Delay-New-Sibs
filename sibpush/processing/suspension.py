@@ -26,6 +26,7 @@ from ..state import (
 )
 from .chunked_runner import run_chunked
 from .query import get_deck_rule, get_deck_rule_by_id
+from .undo import custom_undo_entry
 
 DECK_UNSUSPEND_BATCH_SIZE = 1000
 DECK_UNSUSPEND_BATCH_PAUSE_MS = 100
@@ -63,7 +64,13 @@ def _load_custom_data(card: Card | CardSnapshot) -> dict[str, Any]:
     return _parse_custom_data(card) or {}
 
 
-def _mutate_marker(col: Collection, card: Card, marker_key: str, enabled: bool) -> bool:
+def _mutate_marker(
+    col: Collection,
+    card: Card,
+    marker_key: str,
+    enabled: bool,
+    before_update: Callable[[], None] | None = None,
+) -> bool:
     """Set or remove one marker on a freshly fetched card.
 
     A malformed or non-object non-empty payload is never replaced. This is deliberately a
@@ -86,6 +93,8 @@ def _mutate_marker(col: Collection, card: Card, marker_key: str, enabled: bool) 
         custom_data.pop(marker_key, None)
 
     fresh_card.custom_data = json.dumps(custom_data, ensure_ascii=False) if custom_data else ""
+    if before_update is not None:
+        before_update()
     col.update_card(fresh_card)
     return True
 
@@ -111,7 +120,9 @@ def card_is_suspended_by_addon(card: Card | CardSnapshot) -> bool:
     return _card_has_marker(card, SIBPUSH_SUSPENDED_KEY)
 
 
-def set_card_ignored(col: Collection, card: Card) -> None:
+def set_card_ignored(
+    col: Collection, card: Card, *, before_update: Callable[[], None] | None = None
+) -> None:
     """Mark a card as ignored.
 
     Ignoring is metadata-only: it leaves the card's queue and any suspension provenance marker
@@ -119,13 +130,15 @@ def set_card_ignored(col: Collection, card: Card) -> None:
     needed to restore it when the ignore marker is later cleared.
     """
 
-    _mutate_marker(col, card, SIBPUSH_IGNORED_KEY, True)
+    _mutate_marker(col, card, SIBPUSH_IGNORED_KEY, True, before_update)
 
 
-def clear_card_ignored(col: Collection, card: Card) -> None:
+def clear_card_ignored(
+    col: Collection, card: Card, *, before_update: Callable[[], None] | None = None
+) -> None:
     """Remove new and legacy ignored markers while preserving other custom_data keys."""
 
-    _clear_ignored_markers(col, card)
+    _clear_ignored_markers(col, card, before_update)
 
 
 def mark_card_suspended_by_addon(col: Collection, card: Card) -> None:
@@ -203,7 +216,9 @@ def get_ignored_card_ids_chunked(
     )
 
 
-def _clear_ignored_markers(col: Collection, card: Card) -> bool:
+def _clear_ignored_markers(
+    col: Collection, card: Card, before_update: Callable[[], None] | None = None
+) -> bool:
     """Remove current, compatibility, and legacy ignored representations."""
 
     fresh_card = col.get_card(card.id)
@@ -224,6 +239,8 @@ def _clear_ignored_markers(col: Collection, card: Card) -> bool:
         return False
 
     fresh_card.custom_data = json.dumps(custom_data, ensure_ascii=False) if custom_data else ""
+    if before_update is not None:
+        before_update()
     col.update_card(fresh_card)
     return True
 
@@ -241,10 +258,11 @@ def clear_all_addon_ignored_markers(
     candidate_ids = list(_get_ignored_card_candidates(col))
 
     def _clear_chunk(card_ids: Sequence[CardId]) -> None:
-        for card_id in card_ids:
-            card = col.get_card(card_id)
-            if card_is_ignored(card):
-                _clear_ignored_markers(col, card)
+        with custom_undo_entry(col, "Clear SibPush ignored markers") as start_undo_entry:
+            for card_id in card_ids:
+                card = col.get_card(card_id)
+                if card_is_ignored(card):
+                    _clear_ignored_markers(col, card, start_undo_entry)
 
     run_chunked(
         candidate_ids,
@@ -378,20 +396,22 @@ def _restore_chunk(
     if not eligible_ids:
         return 0
 
-    col.sched.unsuspend_cards(eligible_ids)
-
     restored_count = 0
-    for card_id in eligible_ids:
-        restored_card = col.get_card(card_id)
-        if restored_card.queue == QUEUE_TYPE_SUSPENDED:
-            continue
+    with custom_undo_entry(col, "Restore SibPush cards") as start_undo_entry:
+        start_undo_entry()
+        col.sched.unsuspend_cards(eligible_ids)
 
-        # The marker must still be present before we remove it. The queue check deliberately
-        # accepts any non-suspended post-state because a successful restore may be followed by
-        # Anki's normal queue normalization.
-        if card_is_suspended_by_addon(restored_card):
-            clear_card_suspended_by_addon(col, restored_card)
-            restored_count += 1
+        for card_id in eligible_ids:
+            restored_card = col.get_card(card_id)
+            if restored_card.queue == QUEUE_TYPE_SUSPENDED:
+                continue
+
+            # The marker must still be present before we remove it. The queue check deliberately
+            # accepts any non-suspended post-state because a successful restore may be followed by
+            # Anki's normal queue normalization.
+            if card_is_suspended_by_addon(restored_card):
+                clear_card_suspended_by_addon(col, restored_card)
+                restored_count += 1
 
     return restored_count
 
